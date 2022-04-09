@@ -261,9 +261,9 @@ class Email_Utils(DB_Utils):
     def main(self):
         if (datetime.now().second == 1):
             self.recevie_email(
-                        check_sd = '2022-03-31', 
-                        download_filetype = ['xlsx', 'xlsb', 'pptx'], 
-                        saveYN = False)
+                        check_sd = datetime.now().strftime('%Y-%m-%d'), 
+                        download_filetype = ['xlsx', 'xlsb'], 
+                        saveYN = True)
         else:
             print('waiting for next batch')
         threading.Timer(1, self.main).start() 
