@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import pymssql
 import pyodbc
 from datetime import datetime
 import win32com
@@ -14,11 +13,6 @@ import os
 from logger import Report_Log
 
 class DB_Utils():
-    def connect_mssql(self, server, port, username, password, database):   
-        self.conn =  pymssql.connect(server, port, username, password, database)
-        self.cursor = self.conn.cursor()
-        # log.Log_Write('Q.BIZ DB접속 완료')
-
     def connect_azuredb(self):
         server = 'us-qcells-atp-db-server.database.windows.net'
         database = 'us-qcells-atp-db'
@@ -36,16 +30,16 @@ class DB_Utils():
     def fetch_data(self, sql):
         self.cursor.execute(sql)
         row = self.cursor.fetchall()
+        self.conn.close()
+
         row = [list(i) for i in row]
         col_names = [item[0] for item in self.cursor.description]
         return pd.DataFrame(row, columns=col_names)
 
-    def close_db(self):
-        self.conn.close()
-
     def delete_data(self, sql):
         self.cursor.execute(sql)
         self.conn.commit()
+        self.conn.close()
 
     def insert_data(self, sql, df):
         for row in range(len(df)):
@@ -53,6 +47,7 @@ class DB_Utils():
             print(df.values[row])   
             self.cursor.execute(sql, tuple(df.values[row]))
         self.conn.commit()
+        self.conn.close()
 
 class ETL_Utils(DB_Utils):
     def meta_sheet(self, excel_name):
@@ -61,9 +56,6 @@ class ETL_Utils(DB_Utils):
         self.sheet_info = self.fetch_data(sql)
 
     def clean_data(self):
-        '''
-            dropnan -> select target columns
-        '''
         pk = self.sheet_info[self.sheet_info == sheet]['primary_key'].values[0]
         target_cols = self.sheet_info[self.sheet_info == sheet]['target_columns'].tolist()
         
@@ -72,9 +64,6 @@ class ETL_Utils(DB_Utils):
         return df
 
     def read_excel(self, path):
-        '''
-            Read excel file -> drop unnamed cols -> select target sheets as dataframe
-        '''
         try:
             if path[-4:] == 'xlsb':
                 df_obj = pd.ExcelFile(path,engine='pyxlsb')
@@ -103,46 +92,48 @@ class Master_Reset(DB_Utils):
         self.push_data()
 
     def reset_master_tables(self):
-        #resete all master dataset
         for sheet in self.master_df.sheet_names:
             sql = 'DELETE FROM {}'.format(sheet)
             self.cursor.execute(sql)
         self.conn.commit()
     
     def push_data(self):
-        tablename = self.master_df.sheet_names[0]
-        df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(tablename)
+        df = self.master_df.parse(self.master_df.sheet_names[0])
         for i in range(len(df)):
-            sql = f'''INSERT INTO {tablename} (MailAddr, Division, RnR) VALUES {tuple(df[['MailAddr','Division','RnR']].values[i])}'''
+            time.sleep(0.02)
+            sql = f'''INSERT INTO {self.master_df.sheet_names[0]} (MailAddr, Division, RnR) VALUES 
+            {tuple(df[['MailAddr','Division','RnR']].values[i])}'''
             self.cursor.execute(sql)
         self.conn.commit()
 
-        tablename = self.master_df.sheet_names[1]
-        df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(tablename)
+        df = self.master_df.parse(self.master_df.sheet_names[1])
         for i in range(len(df)):
-            sql = f'''INSERT INTO {tablename} (AREA, MailTitle, Domain, ExcelName, UseYN) VALUES {tuple(df[['AREA', 'MailTitle', 'Domain', 'ExcelName', 'UseYN']].values[i])}'''
+            time.sleep(0.02)
+            sql = f'''INSERT INTO {self.master_df.sheet_names[1]} (AREA, MailTitle, Domain, ExcelName, UseYN) VALUES 
+            {tuple(df[['AREA', 'MailTitle', 'Domain', 'ExcelName', 'UseYN']].values[i])}'''
             self.cursor.execute(sql)
         self.conn.commit()
 
-        tablename = self.master_df.sheet_names[2]
-        df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(tablename)
+        df = self.master_df.parse(self.master_df.sheet_names[2])
         for i in range(len(df)):
-            sql = f'''INSERT INTO {tablename} (FullStatesName, CodeName, CodeNumber) VALUES {tuple(df[['FullStatesName', 'CodeName', 'CodeNumber']].values[i])}'''
+            time.sleep(0.02)
+            sql = f'''INSERT INTO {self.master_df.sheet_names[2]} (FullStatesName, CodeName, CodeNumber) VALUES 
+            {tuple(df[['FullStatesName', 'CodeName', 'CodeNumber']].values[i])}'''
             self.cursor.execute(sql)
         self.conn.commit()
 
-        tablename = self.master_df.sheet_names[3]
-        df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(tablename)
+        df = self.master_df.parse(self.master_df.sheet_names[3])
         for i in range(len(df)):
-            sql = f'''INSERT INTO {tablename} (ExcelName, Domain, SheetList, TransactionColumn, TargetColumns, UseYN) VALUES 
+            time.sleep(0.02)
+            sql = f'''INSERT INTO {self.master_df.sheet_names[3]} (ExcelName, Domain, SheetList, TransactionColumn, TargetColumns, UseYN) VALUES 
             {tuple(df[['ExcelName', 'Domain', 'SheetList', 'TransactionColumn','TargetColumns','UseYN']].values[i])}'''
             self.cursor.execute(sql)
         self.conn.commit()
 
-        tablename = self.master_df.sheet_names[4]
-        df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(tablename)
+        df = self.master_df.parse(self.master_df.sheet_names[4])
         for i in range(len(df)):
-            sql = f'''INSERT INTO {tablename} (WarehouseName, AREA, POD, StreetAddr, CityName, StatesName, PostalCode, FullAddress, UseYN) VALUES 
+            time.sleep(0.02)
+            sql = f'''INSERT INTO {self.master_df.sheet_names[4]} (WarehouseName, AREA, POD, StreetAddr, CityName, StatesName, PostalCode, FullAddress, UseYN) VALUES 
             {tuple(df[['WarehouseName', 'AREA', 'POD', 'StreetAddr', 'CityName', 'StatesName', 'PostalCode', 'FullAddress', 'UseYN']].values[i])}'''
             self.cursor.execute(sql)
         self.conn.commit()
@@ -152,15 +143,16 @@ class Master_Reset(DB_Utils):
 class Email_Utils(DB_Utils):
     def __init__(self, mail_receivers):
         super().__init__()
+        self.mail_receivers = mail_receivers
         self.outlook = win32com.client.Dispatch("Outlook.Application")
         self.Rxoutlook = self.outlook.GetNamespace("MAPI")
-        self.mail_receivers = mail_receivers
+        self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
         self.similarity_threshold = 0.5
         self.root_path = 'C:/Users/Qcells/Desktop/Digital_Planning/atp/script/data'
 
-    def send_email(self, subject, body, master = False):    
+    def send_email(self, subject, body, destination, master = False):    
         Txoutlook = self.outlook.CreateItem(0)
-        Txoutlook.To = self.mail_receivers
+        Txoutlook.To = destination
         Txoutlook.Subject = subject
         Txoutlook.HTMLBody = f"""{body}"""
         if master == True:
@@ -180,8 +172,6 @@ class Email_Utils(DB_Utils):
         self.connect_azuredb()
         sql = 'select Mailtitle, Domain from MAIL_LIST ml'
         whitelist_dict = self.fetch_data(sql)
-        self.conn.close()
-
         whitelist_dict = whitelist_dict.to_dict('records')
         mail_domain = mail_domain.split('@')[-1]
         similarity = 0
@@ -198,72 +188,67 @@ class Email_Utils(DB_Utils):
                     isdomainsame = False
         return similarity, isdomainsame
     
-    def write_logs(self):
-        sql = ''
+    def write_logs(self, FileName, Result):
+        self.connect_azuredb()
+        sql = f'''INSERT INTO RPA_DOWNLOAD_LOGS (ExcelName, Result)
+                VALUES('{FileName}', '{Result}');'''
+        self.cursor.execute(sql)
+        self.conn.commit()
+        self.conn.close()
 
     def recevie_email(self, check_sd, download_filetype, saveYN):
-        recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
-        inbox = self.Rxoutlook.GetSharedDefaultFolder(recip, 6)
-        
+        inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+        print('TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
+
         for i in inbox.items: #inbox의 mail iteration
             atts = []
-            if datetime.strptime(i.SentOn.strftime('%Y-%m-%d'), '%Y-%m-%d') >= datetime.strptime(check_sd, '%Y-%m-%d'): #YYYYMMDD 이전 메일 filtering out                 
+            if datetime.strptime(i.SentOn.strftime('%Y-%m-%d'), '%Y-%m-%d') >= datetime.strptime(check_sd, '%Y-%m-%d'): #YYYYMMDD 이전 메일 filtering out
                 for filetype in range(len(download_filetype)):
-                    atts.append([att for att in i.Attachments if download_filetype[filetype] in att.FileName.split('.')[-1]]) #특정 확장자명 filtering
+                    atts.append([att for att in i.Attachments if download_filetype[filetype] in att.FileName.split('.')[-1].lower()]) #특정 확장자명 filtering
                 atts = list(itertools.chain(*atts))
-                
-                if i.subject == 'request master':
+                if i.subject.lower() == 'request master':
                     print('[EVENT] RECEIVED REQUEST MASTER XLSX ATTACHMENTS')
-                    self.send_email('[RPA] MASTER FILE SHARING', 'remaster file here!', True)
+                    self.send_email('[RPA] MASTER FILE SHARING', 'remaster file here!'
+                                    ,destination = self.sender_mailaddr_extract(i) 
+                                    ,master = True)
                     i.Delete()
                     continue
                         
-                elif i.subject == 'reset master':
-                    print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
-                    if att.FileName == 'master.xlsx':
-                        att.SaveAsFile(self.root_path + '/' + att.FileName)
-                        Master_Reset()
-                    i.Delete()
-                    continue
+                elif i.subject.lower() == 'reset master':
+                    if len(atts) > 0:
+                        print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
+                        for att in atts:
+                            if att.FileName == 'master.xlsx':
+                                os.makedirs(self.root_path + '/MASTSER_HIST', exist_ok = True)
+                                att.SaveAsFile(self.root_path + '/MASTSER_HIST/' + datetime.now().strftime('%Y%m%d%H%M%S') + '_' + att.FileName)
+                                att.SaveAsFile(self.root_path + '/' + att.FileName)
+                                self.send_email('[RPA] MASTER FILE RESET RESULT', 'This is the file used!'
+                                                ,destination = self.sender_mailaddr_extract(i)
+                                                ,master = True)
+                                Master_Reset()
+                        self.write_logs('MASTER', 'PASS')
+                        i.Delete()
+                        continue
+                else:
+                    if len(atts) > 0: #첨부파일이 1개 이상 메일만
+                        try:
+                            sender_addr = self.sender_mailaddr_extract(i)
+                            similarity, isdomainsame = self.invalidate_whitelist(i.subject, sender_addr)
+                            if (similarity > self.similarity_threshold) & (isdomainsame == True): #제목 유사도 0.9 이상, 도메인 동일 조건 filtering
+                                print('=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
+                                print(i.subject) # 메일제목
+                                print(i.Sender, sender_addr, i.CC) #메일 발신인
+                                for att in atts:
+                                    print(att.FileName) #메일 첨부파일    
+                                    if saveYN == True:
+                                        print('[EVENT] SAVED ATTACHMENTS')
+                                        os.makedirs(self.root_path + datetime.now().strftime('%Y-%m-%d'), exist_ok = True)
+                                        att.SaveAsFile(self.root_path + datetime.now().strftime('%Y-%m-%d') + '/' + att.FileName)
+                                    self.write_logs(att.FileName, 'PASS')
+                                i.Delete()
+                                print('\n')  
+                                continue       
+                        except Exception as e:
+                            print(e)
+                            pass
 
-                elif len(atts) > 0: #첨부파일이 1개 이상 메일만                
-                    try:
-                        sender_addr = self.sender_mailaddr_extract(i)
-                        similarity, isdomainsame = self.invalidate_whitelist(i.subject, sender_addr)
-                        if (similarity > self.similarity_threshold) & (isdomainsame == True): #제목 유사도 0.9 이상, 도메인 동일 조건 filtering
-                            print('=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
-                            print(i.subject) # 메일제목
-                            print(i.Sender, sender_addr, i.CC) #메일 발신인
-                            for att in atts:
-                                print(att.FileName) #메일 첨부파일    
-                                if saveYN == True:
-                                    print('[EVENT] SAVED ATTACHMENTS')
-                                    save_path = '/{}'.format(datetime.now().strftime('%Y-%m-%d'))
-                                    if os.path.exists(self.root_path + save_path) ==True: 
-                                        att.SaveAsFile(self.root_path + save_path + '/' + att.FileName)
-                                    else:
-                                        os.mkdir(self.root_path + '/{}'.format(datetime.now().strftime('%Y-%m-%d')))
-                                        att.SaveAsFile(self.root_path + save_path + '/' + att.FileName)
-                                    
-                                    self.connect_azuredb()
-                                    sql = f'''INSERT INTO RPA_DOWNLOAD_LOGS (ExcelName, Result)
-                                            VALUES('{att.FileName}', 'PASS');'''
-                                    self.cursor.execute(sql)
-                                    self.conn.commit()
-                                    self.conn.close()
-                            i.Delete()
-                            print('\n')  
-                            continue       
-                    except Exception as e:
-                        print(e)
-                        pass
-    
-    def main(self):
-        if (datetime.now().second == 1):
-            self.recevie_email(
-                        check_sd = datetime.now().strftime('%Y-%m-%d'), 
-                        download_filetype = ['xlsx', 'xlsb'], 
-                        saveYN = True)
-        else:
-            print('waiting for next batch')
-        threading.Timer(1, self.main).start() 
