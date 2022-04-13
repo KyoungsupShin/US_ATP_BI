@@ -182,7 +182,7 @@ class Email_Utils(DB_Utils):
         self.conn.close()
 
     def recevie_email(self, check_sd, download_filetype, saveYN):
-        inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+        inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)        
         print('TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
 
         for i in inbox.items: #inbox mail iteration
@@ -231,9 +231,11 @@ class Email_Utils(DB_Utils):
                                         os.makedirs(self.root_path + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
                                         att.SaveAsFile(self.root_path + i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
                                     self.write_logs(att.FileName, 'PASS')
-                                i.Delete()
+                                i.Move(self.Rxoutlook.Folders[2])
                                 print('\n')  
                                 continue       
+                else:
+                    i.Delete()
             except Exception as e:
                 print(e)
                 i.Delete()
