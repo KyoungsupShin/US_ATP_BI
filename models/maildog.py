@@ -8,9 +8,9 @@ import threading
 import time
 
 if __name__ == '__main__':
-    email_rpa = Email_Utils(mail_receivers = "dany.shin@hanwha.com")
+    email_rpa = Email_Utils(mail_receivers = "digital_scm@us.q-cells.com")
     while True:
-        print('mail rpa started')
+        print('[ITERATION] {} MAIL RPA ON WORKING NOW'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         email_rpa.recevie_email(
                     check_sd = datetime.now().strftime('%Y-%m-%d'), 
                     download_filetype = ['xlsx', 'xlsb'], 

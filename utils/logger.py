@@ -12,6 +12,7 @@ class Report_Log:
         self.file_name = file_name
         Report_Log.log = None
         Report_Log.dir_name = os.path.dirname(os.path.abspath(__file__)) + '/log/'   
+        os.makedirs(Report_Log.dir_name, exist_ok = True)
         self.propagate = propagate
         Report_Log.Create_Log(self)
               
