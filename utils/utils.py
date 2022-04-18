@@ -12,7 +12,13 @@ from difflib import SequenceMatcher
 import os
 from logger import Report_Log
 
+class Global(object):
+    root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI'
+
 class DB_Utils():
+    def connect_sapdb(self):
+        pass
+
     def connect_azuredb(self):
         server = 'qcells-us-atp-db-server.database.windows.net'
         database = 'us-qcells-atp-db'
@@ -33,17 +39,6 @@ class DB_Utils():
         row = [list(i) for i in row]
         col_names = [item[0] for item in self.cursor.description]
         return pd.DataFrame(row, columns=col_names)
-
-    def delete_data(self, sql):
-        self.cursor.execute(sql)
-        self.conn.commit()
-
-    def insert_data(self, sql, df):
-        for row in range(len(df)):
-            time.sleep(0.02)
-            print(df.values[row])   
-            self.cursor.execute(sql, tuple(df.values[row]))
-        self.conn.commit()
 
     def insert_dataframe(self, tablename, df):
         cols = ', '.join(str(x) for x in df.columns)
@@ -87,26 +82,28 @@ class ETL_Utils(DB_Utils):
             print(e)
             self.send_email(path, e)
             pass
-        
-class Master_Reset(DB_Utils):
-    def __init__(self, sender_addr):
-        self.sender_addr = sender_addr
-        self.connect_azuredb()
-        self.check_isadmin()
-        
-        if self.checkisadmin.values[0][0] == 1:
-            print('[EVENT] Master Reset request authorized !')
-            self.master_df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl')
-            self.master_df.sheet_names #equal to DB table name     
-            self.reset_master_tables()
-            self.push_data()
-        else:
-            print('[WARNING] send e-mail that rejected due to low-authorization')
-        self.conn.close()
 
-    def check_isadmin(self):
+class SAP_Item_Code(DB_Utils):
+    def __init__(self):
+        self.connect_sapdb()
+        self.connect_azuredb()
+        self.fetch_itemcode_from_sap()
+        self.insert_itemcode_to_azuredb()
+    
+    def fetch_itemcode_from_sap(self):
+        #read data from sap db
+        self.conn_sap.close()
+        pass
+
+    def insert_itemcode_to_azuredb(self):
+        #insert data to azure db
+        self.conn.close()
+        pass
+       
+class Master_Reset(DB_Utils):
+    def check_isadmin(self, sender_addr):
         sql = f'''select count(MailAddr) from ADMIN_INFO 
-                WHERE MailAddr = '{self.sender_addr}' '''
+                WHERE MailAddr = '{sender_addr}' '''
         self.checkisadmin = self.fetch_data(sql)
 
     def reset_master_tables(self):
@@ -116,29 +113,48 @@ class Master_Reset(DB_Utils):
         self.conn.commit()
 
     def push_data(self):
+        print('[EVENT] NEW MASTER DATA IS BEING SAVED !')
         for sheet_name in self.master_df.sheet_names:
-            df = pd.ExcelFile('../data/master.xlsx',engine='openpyxl').parse(sheet_name)
+            df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl').parse(sheet_name)
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             self.insert_dataframe(sheet_name, df)
         print('\n')
         
-class Email_Utils(DB_Utils):
+    def master_reset_main(self, sender_addr): 
+        self.connect_azuredb()
+        self.check_isadmin(sender_addr)
+        
+        if self.checkisadmin.values[0][0] == 1:
+            print('[EVENT] Master Reset request authorized !')
+            self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl')
+            self.master_df.sheet_names #equal to DB table name     
+            self.reset_master_tables()
+            self.push_data()
+            self.conn.close()
+            return True
+        else:
+            print('[WARNING] send e-mail that rejected due to low-authorization')
+            self.conn.close()
+            return False
+        
+
+        
+class Email_Utils(Master_Reset):
     def __init__(self, mail_receivers):
         super().__init__()
         self.mail_receivers = mail_receivers
         self.outlook = win32com.client.Dispatch("Outlook.Application")
         self.Rxoutlook = self.outlook.GetNamespace("MAPI")
         self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
-        self.similarity_threshold = 0.6
-        self.root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI/data/'
-        
+        self.similarity_threshold = 0.5
+    
     def send_email(self, subject, body, destination, master = False):    
         Txoutlook = self.outlook.CreateItem(0)
         Txoutlook.To = destination
         Txoutlook.Subject = subject
         Txoutlook.HTMLBody = f"""{body}"""
         if master == True:
-            Txoutlook.Attachments.Add(self.root_path + '/master.xlsx')
+            Txoutlook.Attachments.Add(Global.root_path + '/data/master.xlsx')
         Txoutlook.Send()    
         print('[EVENT] SENT MAIL TO {}'.format(destination))
 
@@ -169,8 +185,6 @@ class Email_Utils(DB_Utils):
                     break
                 else:
                     isdomainsame = False
-
-        print(mail_title, mail_domain, similarity, isdomainsame)
         return similarity, isdomainsame
     
     def write_logs(self, FileName, Result):
@@ -182,9 +196,17 @@ class Email_Utils(DB_Utils):
         self.conn.close()
 
     def recevie_email(self, check_sd, download_filetype, saveYN):
-        inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)        
-        print('TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
+        try:
+            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+        except:
+            print("[WARNING] OUTLOOK APP WAS RESTARTED. TRYING TO RE-CONNECT")
+            self.outlook = win32com.client.Dispatch("Outlook.Application")
+            self.Rxoutlook = self.outlook.GetNamespace("MAPI")    
+            self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)  
+            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+            pass
 
+        print('[ITERATION] TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
         for i in inbox.items: #inbox mail iteration
             atts = []
             try:
@@ -207,39 +229,65 @@ class Email_Utils(DB_Utils):
                             print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
                             for att in atts:
                                 if att.FileName == 'master.xlsx':
-                                    os.makedirs(self.root_path + '/MASTSER_HIST', exist_ok = True)
-                                    att.SaveAsFile(self.root_path + '/MASTSER_HIST/' + i.SentOn.strftime('%Y%m%d%H%M%S') + '_' + att.FileName)
-                                    att.SaveAsFile(self.root_path + '/' + att.FileName)
-                                    self.send_email('[RPA] MASTER FILE RESET RESULT', 'This is the file used!'
-                                                    ,destination = self.sender_mailaddr_extract(i)
-                                                    ,master = True)
-                                    Master_Reset(sender_addr)
+                                    os.makedirs(Global.root_path + '/data/MASTSER_HIST', exist_ok = True)
+                                    att.SaveAsFile(Global.root_path + '/data/MASTSER_HIST/' + i.SentOn.strftime('%Y%m%d%H%M%S') + '_' + att.FileName) #saving Backup file
+                                    att.SaveAsFile(Global.root_path + '/data/' + att.FileName) # saving Master file
+                                    reset_result = self.master_reset_main(sender_addr)
+                                    if reset_result == True:
+                                        self.send_email('[RPA] MASTER FILE RESET RESULT', 'This is the file used!'
+                                                        ,destination = self.sender_mailaddr_extract(i)
+                                                        ,master = True)
+                                    else:
+                                        self.send_email('[RPA] MASTER FILE RESET RESULT', 'You are not authorized to reset master!'
+                                                        ,destination = self.sender_mailaddr_extract(i)
+                                                        ,master = False)
+
                             self.write_logs('MASTER', 'PASS')
-                            i.Delete()
+                            i.Delete()  
                             continue
                     else:
                         if len(atts) > 0: #attachment over 1
                             similarity, isdomainsame = self.invalidate_whitelist(i.subject, sender_addr)
                             if (similarity > self.similarity_threshold) & (isdomainsame == True): #title ssim over 0.9, domain filtering
-                                print('=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
+                                print('\n' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
                                 print(i.subject) # mail title
                                 print(i.Sender, sender_addr, i.CC) #mail sender
                                 for att in atts:
                                     print(att.FileName) #attachment name    
                                     if saveYN == True:
                                         print('[EVENT] SAVED ATTACHMENTS')
-                                        os.makedirs(self.root_path + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
-                                        att.SaveAsFile(self.root_path + i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
+                                        os.makedirs(Global.root_path + '/data/' + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
+                                        att.SaveAsFile(Global.root_path + '/data/' +i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
                                     self.write_logs(att.FileName, 'PASS')
-                                i.Move(self.Rxoutlook.Folders[2])
+                                i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
                                 print('\n')  
-                                continue       
+                                continue
+                            
+                            elif (i.subject.split(' ')[0] == '[ManualUpdate]'):
+                                self.check_isadmin(sender_addr)
+                                if self.checkisadmin.values[0][0] == 1:    
+                                    print('\n' + 'Manual Update ' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
+                                    print(i.subject) # mail title
+                                    print(i.Sender, sender_addr, i.CC) #mail sender
+                                    for att in atts:
+                                        print(att.FileName) #attachment name    
+                                        print('[EVENT] SAVED ATTACHMENTS')
+                                        os.makedirs(Global.root_path + '/data/' + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
+                                        att.SaveAsFile(Global.root_path + '/data/' +i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
+                                        self.write_logs(att.FileName, 'PASS')
+                                    i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
+                                    print('\n')  
+                                    continue
+
                 else:
                     i.Delete()
             except Exception as e:
                 print(e)
                 i.Delete()
                 pass
+            
+        print('[ITERATION] INBOX CHECKING JUST DONE')
+            
 
     if __name__ == '__main__':
         db = DB_Utils()
