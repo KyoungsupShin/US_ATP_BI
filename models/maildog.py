@@ -13,7 +13,7 @@ if __name__ == '__main__':
         print('[ITERATION] {} MAIL RPA ON WORKING NOW'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         email_rpa.recevie_email(
                     check_sd = datetime.now().strftime('%Y-%m-%d'), 
-                    download_filetype = ['xlsx', 'xlsb'], 
+                    download_filetype = ['xlsx', 'xlsb', 'xlsm'], 
                     saveYN = True)
         time.sleep(60)
 

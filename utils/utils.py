@@ -7,62 +7,10 @@ import win32com.client
 import re
 import threading
 import time
+import itertools
+from difflib import SequenceMatcher
+import os
 import glob
-import itertools
-from difflib import SequenceMatcher
-import os
-from logger import Report_Log
-
-class Global(object):
-    root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI'
-
-class DB_Utils():
-    def connect_sapdb(self):
-        pass
-
-    def connect_azuredb(self):
-        server = 'qcells-us-atp-db-server.database.windows.net'
-        database = 'us-qcells-atp-db'
-        username = 'qcells'
-        password = '{Asdqwe123!@#}'   
-        driver= '{ODBC Driver 17 for SQL Server}'  
-        self.conn = pyodbc.connect('DRIVER='+driver
-                                +';SERVER=tcp:'+server
-                                +';PORT=1433;DATABASE='+database
-                                +';UID='+username
-                                +';Pwd='+password
-                                +';Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')
-        self.cursor = self.conn.cursor()
-    
-    def fetch_data(self, sql):
-        self.cursor.execute(sql)
-        row = self.cursor.fetchall()
-        row = [list(i) for i in row]
-        col_names = [item[0] for item in self.cursor.description]
-        return pd.DataFrame(row, columns=col_names)
-
-    def insert_dataframe(self, tablename, df):
-        cols = ', '.join(str(x) for x in df.columns)
-        print('[EVENT] TABLE NAME: ', tablename, cols)
-        for i in range(len(df)):
-            time.sleep(0.02)
-            sql = f'''INSERT INTO {tablename} ({cols}) VALUES {tuple(df[df.columns].values[i])}'''
-            self.cursor.execute(sql)
-        self.conn.commit() 
-
-import pandas as pd
-import numpy as np
-import pyodbc
-from datetime import datetime
-import win32com
-import win32com.client
-import re
-import threading
-import time
-import itertools
-from difflib import SequenceMatcher
-import os
-
 
 class Global(object):
     root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI'
@@ -128,10 +76,7 @@ class ETL_Utils(DB_Utils):
         df = df_obj.parse(sheet_name=self.target_sheet_list[0])
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
         self.df = df.dropna(how = 'all')
-    
-    def data_text(self, x):
-        return str(x)
-    
+
     def yyyymmdd_datetime(self, x):
         removal_string = ['/', '.', '-', '_', ' ']    
         for rs in removal_string:
