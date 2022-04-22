@@ -42,7 +42,7 @@ class DB_Utils():
 
     def insert_dataframe(self, tablename, df):
         cols = ', '.join(str(x) for x in df.columns)
-        print(tablename, cols)
+        print('[EVENT] INSERT INFO: \n', tablename, cols)
         for i in range(len(df)):
             try:
                 time.sleep(0.01)
@@ -62,7 +62,7 @@ class ETL_Utils(DB_Utils):
 
     def meta_sheet_info(self):
         sql = f'''select sheetlist, targetcolumns, datatype from SHEET_INFO
-                where ExcelName = '{self.excel_name}' and UseYN = 'Y'
+                where ExcelName = '{self.excel_name}' and BackUpYN = 'Y'
                 '''
         self.sheet_info = self.fetch_data(sql)
         self.target_sheet_list = list(set(self.sheet_info['sheetlist'].tolist()))
@@ -78,62 +78,165 @@ class ETL_Utils(DB_Utils):
         self.df = df.dropna(how = 'all')
 
     def yyyymmdd_datetime(self, x):
+        if len(re.sub(r'[^0-9]', '', str(x))) == 0: #fully string data ex) TBD
+            return ''
+        
+        if pd.isna(x): # nan value filter
+            return '' 
+        
+        try:
+            if pd.isnull(np.datetime64(x)): #NAT value filter
+                return ''    
+        except:
+            pass
+        
+        x = str(x)
         removal_string = ['/', '.', '-', '_', ' ']    
         for rs in removal_string:
             x = x.replace(rs, '')
         if len(x) == 6:
             x = x + '01'
+        else:
+            x = x[:8]
+        
         try:
             return datetime.strftime(datetime.strptime(x, '%Y%m%d'), '%Y-%m-%d')
         except:
-            return datetime.strftime(datetime.strptime(x, '%m%d%Y'), '%Y-%m-%d')
+            try:
+                return datetime.strftime(datetime.strptime(x, '%m%d%Y'), '%Y-%m-%d')
+            except:
+                return ''
+                pass
             pass
 
-    def clean_data_text(self):
+    def data_int(self, x):
+        if pd.isna(x):
+            return 0
+        elif (type(x) != int) or (type(x) != float):
+            return 0
+        else:
+            return int(x)
+
+    def data_float(self, x):
+        if type(x) == str:
+            x = re.findall(r'\d+', x)
+            if len(x) == 0:
+                return 0
+            else:
+                return float(x)
+        elif type(x) == int:
+            return float(x)
+        else: 
+            return 0
+    
+    def data_text(self, x):
+        if pd.isna(x):
+            return ''
+        else:
+            x = str(x)
+            x = x.replace("'", "")
+
+            if len(x) > 150:
+                return x[:100]
+            else:
+                return x
+    
+    def clean_data_text(self, func):
         target_columns_text = self.sheet_info[self.sheet_info['datatype'] == 'TEXT']['targetcolumns'].tolist()
-        print(target_columns_text, '\n')
         for col in target_columns_text:
-            self.df[col] = self.df[col].apply(lambda x:str(x))
+            self.df[col] = self.df[col].apply(lambda x:func(x))
 
-    def clean_data_int(self):
+    def clean_data_int(self, func):
         target_columns_int = self.sheet_info[self.sheet_info['datatype'] == 'INT']['targetcolumns'].tolist()
-        print(target_columns_int, '\n')
         for col in target_columns_int:
-            self.df[col] = self.df[col].apply(lambda x:int(x))
+            self.df[col] = self.df[col].apply(lambda x:func(x))
 
-    def clean_data_float(self):
+    def clean_data_float(self, func):
         target_columns_float = self.sheet_info[self.sheet_info['datatype'] == 'FLOAT']['targetcolumns'].tolist()
-        print(target_columns_float, '\n')
         for col in target_columns_float:
-            self.df[col] = self.df[col].apply(lambda x:float(x))
+            self.df[col] = self.df[col].apply(lambda x:func(x))
 
-    def clean_data_datetime(self):
+    def clean_data_datetime(self, func):
         target_columns_datetime = self.sheet_info[self.sheet_info['datatype'] == 'DATETIME']['targetcolumns'].tolist()
-        print(target_columns_datetime, '\n')
-
         for col in target_columns_datetime:
-            self.df[col] = self.df[col].apply(lambda x:self.yyyymmdd_datetime(str(x)))
-            
+            self.df[col] = self.df[col].apply(lambda x:func(str(x)))
         self.insert_dataframe(self.excel_name, self.df)
         self.conn.close()
 
-class SAP_Item_Code(DB_Utils):
-    def __init__(self):
-        self.connect_sapdb()
-        self.connect_azuredb()
-        self.fetch_itemcode_from_sap()
-        self.insert_itemcode_to_azuredb()
-    
-    def fetch_itemcode_from_sap(self):
-        #read data from sap db
-        self.conn_sap.close()
-        pass
+class ETL_Pipelines(DB_Utils):
+    def __init__(self, saved_path, mail_category):
+        self.saved_path = saved_path
+        self.mail_category = mail_category
+        self.main()
 
-    def insert_itemcode_to_azuredb(self):
-        #insert data to azure db
+    def Check_file_is_updated(self):
+        self.connect_azuredb()        
+        sql = f'''
+        SELECT COUNT(1) FROM {self.mail_category}
+        WHERE Updated_Date = CONVERT(DATE, [dbo].[dReturnDate](getdate()))'''
+        sql2 = f'''
+        DELETE FROM {self.mail_category}
+        WHERE Updated_Date = CONVERT(DATE, [dbo].[dReturnDate](getdate()))'''
+
+        if int(self.fetch_data(sql).values[0][0]) > 1:
+            print('[EVENT] {} DATASET HAS ALREADY SAVED TODAY. RPA IS INITIALIZING NOW'.format(self.mail_category))
+            self.cursor.execute(sql2)
+            self.conn.commit() 
+        else:
+            pass
         self.conn.close()
-        pass
-       
+
+    def ON_HAND_ETL(self):
+        eu = ETL_Utils(excel_name = 'ON_HAND')
+        eu.meta_sheet_info()
+        eu.read_excel()
+        eu.clean_data_text(eu.data_text)
+        eu.clean_data_int(int)
+        eu.clean_data_float(float)
+        eu.clean_data_datetime(eu.yyyymmdd_datetime)
+
+    def ORDER_STATUS_REPORT_ETL(self):
+        eu = ETL_Utils(excel_name = 'ORDER_STATUS_REPORT')
+        eu.meta_sheet_info()
+        eu.read_excel()
+        eu.clean_data_text(eu.data_text)
+        eu.clean_data_int(eu.data_int)
+        eu.clean_data_int(int)
+        eu.clean_data_float(eu.data_float)
+        eu.clean_data_float(float)
+        eu.clean_data_datetime(eu.yyyymmdd_datetime)
+        
+    def OUT_bound_ETL(self):
+        eu = ETL_Utils(excel_name = 'OUT_BOUND')
+        eu.meta_sheet_info()
+        eu.read_excel()
+        eu.clean_data_text(eu.data_text)
+        eu.clean_data_int(int)
+        eu.clean_data_float(float)
+        eu.clean_data_datetime(eu.yyyymmdd_datetime)
+    
+    def IN_BOUND_ETL(self):
+        eu = ETL_Utils(excel_name = 'IN_BOUND')
+        eu.meta_sheet_info()
+        eu.read_excel()
+        eu.clean_data_text(eu.data_text)
+        eu.clean_data_int(int)
+        eu.clean_data_float(float)
+        eu.clean_data_datetime(eu.yyyymmdd_datetime)
+    
+    def main(self):
+        print('[EVENT] DATA ETL PIPELINE JUST BEGAN : {} !'.format(self.mail_category))
+        self.Check_file_is_updated()
+
+        if self.mail_category == 'IN_BOUND':
+            self.IN_BOUND_ETL()
+        if self.mail_category == 'OUT_BOUND':
+            self.OUT_bound_ETL()
+        if self.mail_category == 'ON_HAND':
+            self.ON_HAND_ETL()
+        if self.mail_category == 'ORDER_STATUS_REPORT':
+            self.ORDER_STATUS_REPORT_ETL()
+
 class Master_Reset(DB_Utils):
     def check_isadmin(self, sender_addr):
         sql = f'''select count(MailAddr) from ADMIN_INFO 
@@ -166,7 +269,6 @@ class Master_Reset(DB_Utils):
             self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl')
             self.master_df.sheet_names #equal to DB table name     
             self.reset_master_tables()
-            
             try:
                 self.push_data()
             except Exception as e:
@@ -175,7 +277,6 @@ class Master_Reset(DB_Utils):
                 self.reset_master_tables()
                 self.push_data(file_path = glob.glob('/data/MASTER_HIST/*.xlsx')[-1])
                 pass
-
             self.conn.close()
             return True
         else:
@@ -218,7 +319,7 @@ class Email_Utils(Master_Reset):
         whitelist_dict = whitelist_dict.to_dict('records')
         mail_domain = mail_domain.split('@')[-1]
         similarity = 0
-        
+        mail_category = 'None'
         for idx, whitelist in enumerate(whitelist_dict):
             if similarity <= SequenceMatcher(None, whitelist['Mailtitle'], mail_title).ratio():
                 similarity = SequenceMatcher(None, whitelist['Mailtitle'], mail_title).ratio()
@@ -226,12 +327,30 @@ class Email_Utils(Master_Reset):
                 max_ssim_domian = whitelist_dict[idx]['Domain']                
                 if (mail_domain == max_ssim_domian) & (similarity > self.similarity_threshold):
                     isdomainsame = True
+                    mail_category = self.get_mailcategory(max_ssim_title)
                     break
                 else:
                     isdomainsame = False
-        return similarity, isdomainsame
+        return similarity, isdomainsame, mail_category
     
+    def get_mailcategory(self, max_ssim_title):
+        sql = f'''
+        select distinct MailCategory from MAIL_LIST
+        WHERE MailTitle = '{max_ssim_title}'
+        '''
+        return self.fetch_data(sql).values[0][0]
+
+    def save_attachments(self, att, i):
+        print(att.FileName) #attachment name    
+        print('[EVENT] SAVED ATTACHMENTS')
+        saved_dir = Global.root_path + '/data/' +i.SentOn.strftime('%Y-%m-%d')
+        saved_path = saved_dir + '/' + att.FileName
+        os.makedirs(saved_dir, exist_ok = True)
+        att.SaveAsFile(saved_path)
+        ETL_Pipelines(saved_path, self.mail_category)
+
     def write_logs(self, FileName, Result):
+        print('[EVENT] SAVED ATTACHMENTS LOG WROTTEN IN RPA_DOWNLOAD_LOGS')
         self.connect_azuredb()
         sql = f'''INSERT INTO RPA_DOWNLOAD_LOGS (ExcelName, Result)
                 VALUES('{FileName}', '{Result}');'''
@@ -291,38 +410,30 @@ class Email_Utils(Master_Reset):
                             continue
                     else:
                         if len(atts) > 0: #attachment over 1
-                            similarity, isdomainsame = self.invalidate_whitelist(i.subject, sender_addr)
+                            similarity, isdomainsame, self.mail_category = self.invalidate_whitelist(i.subject, sender_addr)
                             if (similarity > self.similarity_threshold) & (isdomainsame == True): #title ssim over 0.9, domain filtering
                                 print('\n' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
                                 print(i.subject) # mail title
                                 print(i.Sender, sender_addr, i.CC) #mail sender
                                 for att in atts:
-                                    print(att.FileName) #attachment name    
                                     if saveYN == True:
-                                        print('[EVENT] SAVED ATTACHMENTS')
-                                        os.makedirs(Global.root_path + '/data/' + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
-                                        att.SaveAsFile(Global.root_path + '/data/' +i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
-                                    self.write_logs(att.FileName, 'PASS')
+                                        self.save_attachments(att, i)
+                                        self.write_logs(att.FileName, 'PASS')
                                 i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
-                                print('\n')  
                                 continue
                             
                             elif (i.subject.split(' ')[0] == '[ManualUpdate]'):
                                 self.check_isadmin(sender_addr)
-                                if self.checkisadmin.values[0][0] == 1:    
+                                if self.checkisadmin.values[0][0] == 1:
+                                    similarity, isdomainsame, self.mail_category = self.invalidate_whitelist(i.subject.split(' ')[1:], sender_addr)
                                     print('\n' + 'Manual Update ' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
                                     print(i.subject) # mail title
                                     print(i.Sender, sender_addr, i.CC) #mail sender
                                     for att in atts:
-                                        print(att.FileName) #attachment name    
-                                        print('[EVENT] SAVED ATTACHMENTS')
-                                        os.makedirs(Global.root_path + '/data/' + i.SentOn.strftime('%Y-%m-%d'), exist_ok = True)
-                                        att.SaveAsFile(Global.root_path + '/data/' +i.SentOn.strftime('%Y-%m-%d') + '/' + att.FileName)
+                                        self.save_attachments(att, i)
                                         self.write_logs(att.FileName, 'PASS')
                                     i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
-                                    print('\n')  
                                     continue
-
                 else:
                     i.Delete()
             except Exception as e:
