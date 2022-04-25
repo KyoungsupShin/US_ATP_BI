@@ -323,30 +323,29 @@ class Email_Utils(Master_Reset):
         else:
             return i.SenderEmailAddress
 
-    def create_mailbox(self):
+    def access_mailbox(self):
         try:
-            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+            self.inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
         except:
             print("[WARNING] OUTLOOK APP WAS RESTARTED. TRYING TO RE-CONNECT")
             self.outlook = win32com.client.Dispatch("Outlook.Application")
             self.Rxoutlook = self.outlook.GetNamespace("MAPI")    
             self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)  
-            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+            self.inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
             pass
 
     def category_replace(self):
-        if mail_category == 'outbound':
-                mail_category = 'OUT_BOUND'
-        elif mail_category == 'inbound':
-            mail_category = 'IN_BOUND'
-        elif mail_category == 'onhand':
-            mail_category = 'ON_HAND'
-        elif mail_category == 'orderstatusreport':
-            mail_category = 'ORDER_STATUS_REPORT'
+        if self.mail_category == 'outbound':
+                self.mail_category = 'OUT_BOUND'
+        elif self.mail_category == 'inbound':
+            self.mail_category = 'IN_BOUND'
+        elif self.mail_category == 'onhand':
+            self.mail_category = 'ON_HAND'
+        elif self.mail_category == 'orderstatusreport':
+            self.mail_category = 'ORDER_STATUS_REPORT'
         else:
             raise ValueError('THERE IS NO CATEGORY IN THE LIST')
-        return mail_category
-        
+
     def invalidate_whitelist(self, mail_title, mail_domain):
         self.connect_azuredb()
         sql = 'select Mailtitle, Domain from MAIL_LIST ml'
@@ -393,169 +392,169 @@ class Email_Utils(Master_Reset):
         self.conn.commit()
         self.conn.close()
 
-    def recevie_email(self, check_sd, download_filetype, saveYN):
-        #TDD download email data, request master, request data(previous, today), reset master, reset data(previous, today) 
-        try:
-            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
-        except:
-            print("[WARNING] OUTLOOK APP WAS RESTARTED. TRYING TO RE-CONNECT")
-            self.outlook = win32com.client.Dispatch("Outlook.Application")
-            self.Rxoutlook = self.outlook.GetNamespace("MAPI")    
-            self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)  
-            inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
-            pass
+    # def recevie_email(self, check_sd, download_filetype, saveYN):
+    #     #TDD download email data, request master, request data(previous, today), reset master, reset data(previous, today) 
+    #     try:
+    #         inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+    #     except:
+    #         print("[WARNING] OUTLOOK APP WAS RESTARTED. TRYING TO RE-CONNECT")
+    #         self.outlook = win32com.client.Dispatch("Outlook.Application")
+    #         self.Rxoutlook = self.outlook.GetNamespace("MAPI")    
+    #         self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)  
+    #         inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
+    #         pass
 
-        print('[ITERATION] TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
-        for i in inbox.items: #inbox mail iteration
-            atts = []
-            # try:
-            if datetime.strptime(i.SentOn.strftime('%Y-%m-%d'), '%Y-%m-%d') >= datetime.strptime(check_sd, '%Y-%m-%d'): #YYYYMMDD previous mail filtering out
-                for filetype in range(len(download_filetype)):
-                    atts.append([att for att in i.Attachments if download_filetype[filetype] in att.FileName.split('.')[-1].lower()]) #specific extension filtering
-                atts = list(itertools.chain(*atts))
-                sender_addr = self.sender_mailaddr_extract(i)
-                if i.subject.lower().strip() == 'request master':
-                    print('[EVENT] RECEIVED REQUEST MASTER XLSX ATTACHMENTS')
-                    self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
-                                    ,'RETURNING MASTER EXCEL FILE'
-                                    ,destination = self.sender_mailaddr_extract(i) 
-                                    ,attachment_path = Global.root_path + '/data/master.xlsx')
-                    i.Delete()
-                    continue
+    #     print('[ITERATION] TOTAL E-MAIL FILED: {}'.format(len(inbox.items)))
+    #     for i in inbox.items: #inbox mail iteration
+    #         atts = []
+    #         # try:
+    #         if datetime.strptime(i.SentOn.strftime('%Y-%m-%d'), '%Y-%m-%d') >= datetime.strptime(check_sd, '%Y-%m-%d'): #YYYYMMDD previous mail filtering out
+    #             for filetype in range(len(download_filetype)):
+    #                 atts.append([att for att in i.Attachments if download_filetype[filetype] in att.FileName.split('.')[-1].lower()]) #specific extension filtering
+    #             atts = list(itertools.chain(*atts))
+    #             sender_addr = self.sender_mailaddr_extract(i)
+    #             if i.subject.lower().strip() == 'request master':
+    #                 print('[EVENT] RECEIVED REQUEST MASTER XLSX ATTACHMENTS')
+    #                 self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
+    #                                 ,'RETURNING MASTER EXCEL FILE'
+    #                                 ,destination = self.sender_mailaddr_extract(i) 
+    #                                 ,attachment_path = Global.root_path + '/data/master.xlsx')
+    #                 i.Delete()
+    #                 continue
 
-                elif i.subject.lower().split('/')[0].strip() == 'request data':
-                    try:
-                        mail_category = re.sub(r'[^a-zA-Z]', '', i.subject.lower().split('/')[1])                    
-                        if len(i.subject.lower().split('/')) >= 3:
-                            etl_util = ETL_Utils('')
-                            Req_date = etl_util.yyyymmdd_datetime(i.subject.lower().split('/')[2])
-                        else:
-                            Req_date = datetime.now().strftime('%Y-%m-%d')
-                        Req_date_sql = f''' WHERE Updated_Date = '{Req_date}' '''
+    #             elif i.subject.lower().split('/')[0].strip() == 'request data':
+    #                 try:
+    #                     mail_category = re.sub(r'[^a-zA-Z]', '', i.subject.lower().split('/')[1])                    
+    #                     if len(i.subject.lower().split('/')) >= 3:
+    #                         etl_util = ETL_Utils('')
+    #                         Req_date = etl_util.yyyymmdd_datetime(i.subject.lower().split('/')[2])
+    #                     else:
+    #                         Req_date = datetime.now().strftime('%Y-%m-%d')
+    #                     Req_date_sql = f''' WHERE Updated_Date = '{Req_date}' '''
                         
-                        if mail_category == 'outbound':
-                            mail_category = 'OUT_BOUND'
-                        elif mail_category == 'inbound':
-                            mail_category = 'IN_BOUND'
-                        elif mail_category == 'onhand':
-                            mail_category = 'ON_HAND'
-                        elif mail_category == 'orderstatusreport':
-                            mail_category = 'ORDER_STATUS_REPORT'
-                        else:
-                            raise ValueError('THERE IS NO CATEGORY IN THE LIST')
+    #                     if mail_category == 'outbound':
+    #                         mail_category = 'OUT_BOUND'
+    #                     elif mail_category == 'inbound':
+    #                         mail_category = 'IN_BOUND'
+    #                     elif mail_category == 'onhand':
+    #                         mail_category = 'ON_HAND'
+    #                     elif mail_category == 'orderstatusreport':
+    #                         mail_category = 'ORDER_STATUS_REPORT'
+    #                     else:
+    #                         raise ValueError('THERE IS NO CATEGORY IN THE LIST')
                     
-                        sql = f'''SELECT * FROM {mail_category}''' + Req_date_sql
-                        self.connect_azuredb()
-                        df = self.fetch_data(sql)
+    #                     sql = f'''SELECT * FROM {mail_category}''' + Req_date_sql
+    #                     self.connect_azuredb()
+    #                     df = self.fetch_data(sql)
 
-                        if len(df) > 0: 
-                            df.to_csv(Global.root_path + '/data/{}.csv'.format(mail_category), index=False)
-                            print('[EVENT] RECEIVED REQUEST {} {} XLSX ATTACHMENTS'.format(mail_category, Req_date))
-                            self.send_email('[RPA] {} FILE SHARING'.format(mail_category)
-                                            ,'{} FILE REQUEST'.format(mail_category)
-                                            ,'RETURNING {} EXCEL FILE'.format(mail_category)
-                                            ,destination = self.sender_mailaddr_extract(i)
-                                            ,attachment_path=Global.root_path + '/data/{}.csv'.format(mail_category))
-                        else:
-                            print('[EVENT] RECEIVED REQUEST {} XLSX ATTACHMENTS, BUT NO UPDATED DATA'.format(mail_category))
-                            self.send_email('[RPA] {} FILE SHARING'.format(mail_category)
-                                            ,'{} FILE REQUEST'.format(mail_category)
-                                            ,'THERE IS NO UPDATED FILE : {}'.format(mail_category)
-                                            ,destination = self.sender_mailaddr_extract(i))
-                        i.Delete()
-                        continue
-                    except:
-                            print('[ERROR] RECEIVED REQUEST {} XLSX ATTACHMENTS, BUT ERROR OCCURRED'.format(mail_category))
-                            self.send_email('[ERROR] {} FILE SHARING'.format(mail_category)
-                                            ,'{} FILE REQUEST'.format(mail_category)
-                                            , 'RPA WOULD LIKE TO RECIVE THIS FORMAT <br> EX) request data/inbound/20220101 <br> PLEASE CHECK OUT MAIL TITLE FORMAT'
-                                            ,destination = self.sender_mailaddr_extract(i))
-                            pass
-                else:
-                    if len(atts) > 0: #attachment over 1
-                        similarity, isdomainsame, self.mail_category = self.invalidate_whitelist(i.subject, sender_addr)
+    #                     if len(df) > 0: 
+    #                         df.to_csv(Global.root_path + '/data/{}.csv'.format(mail_category), index=False)
+    #                         print('[EVENT] RECEIVED REQUEST {} {} XLSX ATTACHMENTS'.format(mail_category, Req_date))
+    #                         self.send_email('[RPA] {} FILE SHARING'.format(mail_category)
+    #                                         ,'{} FILE REQUEST'.format(mail_category)
+    #                                         ,'RETURNING {} EXCEL FILE'.format(mail_category)
+    #                                         ,destination = self.sender_mailaddr_extract(i)
+    #                                         ,attachment_path=Global.root_path + '/data/{}.csv'.format(mail_category))
+    #                     else:
+    #                         print('[EVENT] RECEIVED REQUEST {} XLSX ATTACHMENTS, BUT NO UPDATED DATA'.format(mail_category))
+    #                         self.send_email('[RPA] {} FILE SHARING'.format(mail_category)
+    #                                         ,'{} FILE REQUEST'.format(mail_category)
+    #                                         ,'THERE IS NO UPDATED FILE : {}'.format(mail_category)
+    #                                         ,destination = self.sender_mailaddr_extract(i))
+    #                     i.Delete()
+    #                     continue
+    #                 except:
+    #                         print('[ERROR] RECEIVED REQUEST {} XLSX ATTACHMENTS, BUT ERROR OCCURRED'.format(mail_category))
+    #                         self.send_email('[ERROR] {} FILE SHARING'.format(mail_category)
+    #                                         ,'{} FILE REQUEST'.format(mail_category)
+    #                                         , 'RPA WOULD LIKE TO RECIVE THIS FORMAT <br> EX) request data/inbound/20220101 <br> PLEASE CHECK OUT MAIL TITLE FORMAT'
+    #                                         ,destination = self.sender_mailaddr_extract(i))
+    #                         pass
+    #             else:
+    #                 if len(atts) > 0: #attachment over 1
+    #                     similarity, isdomainsame, self.mail_category = self.invalidate_whitelist(i.subject, sender_addr)
                         
-                        if i.subject.lower().split('/')[0].strip() == 'update data':
-                            # 날짜 추출을 dataframe의 update_date로 변경 // excel file encrypt error 처리 
-                            # 현재 request -> data save -> etl pipeline -> delete prev -> insert에서 updated_date column을 포함하지 않고 insert함.
-                            mail_category = re.sub(r'[^a-zA-Z]', '', i.subject.lower().split('/')[1])  
-                            if len(i.subject.lower().split('/')) >= 3:
-                                etl_util = ETL_Utils('')
-                                Req_date = etl_util.yyyymmdd_datetime(i.subject.lower().split('/')[2])
-                            else:
-                                Req_date = datetime.now().strftime('%Y-%m-%d')
+    #                     if i.subject.lower().split('/')[0].strip() == 'update data':
+    #                         # 날짜 추출을 dataframe의 update_date로 변경 // excel file encrypt error 처리 
+    #                         # 현재 request -> data save -> etl pipeline -> delete prev -> insert에서 updated_date column을 포함하지 않고 insert함.
+    #                         mail_category = re.sub(r'[^a-zA-Z]', '', i.subject.lower().split('/')[1])  
+    #                         if len(i.subject.lower().split('/')) >= 3:
+    #                             etl_util = ETL_Utils('')
+    #                             Req_date = etl_util.yyyymmdd_datetime(i.subject.lower().split('/')[2])
+    #                         else:
+    #                             Req_date = datetime.now().strftime('%Y-%m-%d')
                             
-                            if mail_category == 'outbound':
-                                self.mail_category = 'OUT_BOUND'
-                            elif mail_category == 'inbound':
-                                self.mail_category = 'IN_BOUND'
-                            elif mail_category == 'onhand':
-                                self.mail_category = 'ON_HAND'
-                            elif mail_category == 'orderstatusreport':
-                                self.mail_category = 'ORDER_STATUS_REPORT'
-                            else:
-                                raise ValueError('THERE IS NO CATEGORY IN THE LIST')
+    #                         if mail_category == 'outbound':
+    #                             self.mail_category = 'OUT_BOUND'
+    #                         elif mail_category == 'inbound':
+    #                             self.mail_category = 'IN_BOUND'
+    #                         elif mail_category == 'onhand':
+    #                             self.mail_category = 'ON_HAND'
+    #                         elif mail_category == 'orderstatusreport':
+    #                             self.mail_category = 'ORDER_STATUS_REPORT'
+    #                         else:
+    #                             raise ValueError('THERE IS NO CATEGORY IN THE LIST')
                         
-                            self.check_isadmin(sender_addr)
-                            if self.checkisadmin.values[0][0] == 1:
-                                print('\n' + 'Manual Update ' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
-                                print(i.subject) # mail title
-                                print(i.Sender, sender_addr, i.CC) #mail sender
-                                for att in atts:
-                                    self.save_attachments(att, i, Req_date)
-                                    self.write_logs(att.FileName, 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
+    #                         self.check_isadmin(sender_addr)
+    #                         if self.checkisadmin.values[0][0] == 1:
+    #                             print('\n' + 'Manual Update ' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
+    #                             print(i.subject) # mail title
+    #                             print(i.Sender, sender_addr, i.CC) #mail sender
+    #                             for att in atts:
+    #                                 self.save_attachments(att, i, Req_date)
+    #                                 self.write_logs(att.FileName, 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
                                 
-                                i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
+    #                             i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
                                 
-                                #check if updated -> delete data -> insert query
-                                continue
+    #                             #check if updated -> delete data -> insert query
+    #                             continue
 
-                        elif i.subject.lower() == 'reset master':
-                            print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
-                            self.check_isadmin(sender_addr)
-                            if self.checkisadmin.values[0][0] == 1:
-                                for att in atts:
-                                    if att.FileName == 'master.xlsx':
-                                        att.SaveAsFile(Global.root_path + '/data/' + att.FileName) # saving Master file                                        
-                                        try:
-                                            self.master_reset_main(sender_addr)
-                                            os.makedirs(Global.root_path + '/data/MASTER_HIST', exist_ok = True)
-                                            att.SaveAsFile(Global.root_path + '/data/MASTER_HIST/' + i.SentOn.strftime('%Y%m%d%H%M%S') + '_' + att.FileName) #saving Backup file
-                                            self.send_email('[RPA] MASTER FILE RESET RESULT', 'MASTER RESET'
-                                                            , 'RPA SYSTEM USED THIS FILE. YOUR REQUEST SUCCESSFULLY APLLIED <br> SENDING YOU THE NEWEST MASTER FILE'
-                                                            ,destination = self.sender_mailaddr_extract(i)
-                                                            ,attachment_path = Global.root_path + '/data/master.xlsx')
-                                            self.write_logs('MASTER', 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
-                                        except Exception as e:
-                                            print('[WARNING] MASTER FILE IS DAMAGED. RPA WILL ROLL-BACK.' , '\n', str(e))
-                                            self.master_reset_main(sender_addr, file_path = glob.glob(Global.root_path + '/data/MASTER_HIST/*.xlsx')[-1])
-                                            self.send_email('[ERROR] MASTER FILE RESET RESULT', 'MASTER RESET ERROR'
-                                                            ,'MASTER FILE YOU WOULD LIKE TO RESET SEEMS DAMAGED. <br> PLEASE CHECK OUT THE FILE AGAIN'
-                                                            ,destination = self.sender_mailaddr_extract(i))
-                            else:
-                                print('[WARNING] send e-mail that rejected due to low-authorization')
-                                self.send_email('[WARNING] MASTER FILE RESET RESULT', 'MASTER RESET DENIED'
-                                                ,'YOUR MAIL ADDRESS IS NOT AUTHORIZED. PLEASE RESISTER YOUR MAIL AS A MANAGER'
-                                                ,destination = self.sender_mailaddr_extract(i))
-                            i.Delete()  
-                            continue
+    #                     elif i.subject.lower() == 'reset master':
+    #                         print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
+    #                         self.check_isadmin(sender_addr)
+    #                         if self.checkisadmin.values[0][0] == 1:
+    #                             for att in atts:
+    #                                 if att.FileName == 'master.xlsx':
+    #                                     att.SaveAsFile(Global.root_path + '/data/' + att.FileName) # saving Master file                                        
+    #                                     try:
+    #                                         self.master_reset_main(sender_addr)
+    #                                         os.makedirs(Global.root_path + '/data/MASTER_HIST', exist_ok = True)
+    #                                         att.SaveAsFile(Global.root_path + '/data/MASTER_HIST/' + i.SentOn.strftime('%Y%m%d%H%M%S') + '_' + att.FileName) #saving Backup file
+    #                                         self.send_email('[RPA] MASTER FILE RESET RESULT', 'MASTER RESET'
+    #                                                         , 'RPA SYSTEM USED THIS FILE. YOUR REQUEST SUCCESSFULLY APLLIED <br> SENDING YOU THE NEWEST MASTER FILE'
+    #                                                         ,destination = self.sender_mailaddr_extract(i)
+    #                                                         ,attachment_path = Global.root_path + '/data/master.xlsx')
+    #                                         self.write_logs('MASTER', 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
+    #                                     except Exception as e:
+    #                                         print('[WARNING] MASTER FILE IS DAMAGED. RPA WILL ROLL-BACK.' , '\n', str(e))
+    #                                         self.master_reset_main(sender_addr, file_path = glob.glob(Global.root_path + '/data/MASTER_HIST/*.xlsx')[-1])
+    #                                         self.send_email('[ERROR] MASTER FILE RESET RESULT', 'MASTER RESET ERROR'
+    #                                                         ,'MASTER FILE YOU WOULD LIKE TO RESET SEEMS DAMAGED. <br> PLEASE CHECK OUT THE FILE AGAIN'
+    #                                                         ,destination = self.sender_mailaddr_extract(i))
+    #                         else:
+    #                             print('[WARNING] send e-mail that rejected due to low-authorization')
+    #                             self.send_email('[WARNING] MASTER FILE RESET RESULT', 'MASTER RESET DENIED'
+    #                                             ,'YOUR MAIL ADDRESS IS NOT AUTHORIZED. PLEASE RESISTER YOUR MAIL AS A MANAGER'
+    #                                             ,destination = self.sender_mailaddr_extract(i))
+    #                         i.Delete()  
+    #                         continue
 
-                        elif (similarity > self.similarity_threshold) & (isdomainsame == True): #title ssim over 0.9, domain filtering
-                            print('\n' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
-                            print(i.subject) # mail title
-                            print(i.Sender, sender_addr, i.CC) #mail sender
-                            for att in atts:
-                                if saveYN == True:
-                                    self.save_attachments(att, i)
-                                    self.write_logs(att.FileName, 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
-                            i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
-                            continue                    
-            else:
-                i.Delete()
-            # except Exception as e:
-            #     print(e)
-            #     i.Delete()
-            #     pass 
-        print('[ITERATION] INBOX CHECKING JUST DONE')
+    #                     elif (similarity > self.similarity_threshold) & (isdomainsame == True): #title ssim over 0.9, domain filtering
+    #                         print('\n' + '=' * 10, i.SentOn.strftime('%Y-%m-%d'), '=' * 10)
+    #                         print(i.subject) # mail title
+    #                         print(i.Sender, sender_addr, i.CC) #mail sender
+    #                         for att in atts:
+    #                             if saveYN == True:
+    #                                 self.save_attachments(att, i)
+    #                                 self.write_logs(att.FileName, 'PASS', i.SentOn.strftime('%Y-%m-%d %H:%M:%S'))
+    #                         i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
+    #                         continue                    
+    #         else:
+    #             i.Delete()
+    #         # except Exception as e:
+    #         #     print(e)
+    #         #     i.Delete()
+    #         #     pass 
+    #     print('[ITERATION] INBOX CHECKING JUST DONE')
             
 
