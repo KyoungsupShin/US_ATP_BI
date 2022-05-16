@@ -4,18 +4,23 @@ import sys
 from datetime import datetime
 sys.path.append('../utils')
 from utils import Email_Utils
+from mail_detect import Email_detect
 import threading
 import time
 
 if __name__ == '__main__':
-    email_rpa = Email_Utils(mail_receivers = "digital_scm@us.q-cells.com")
+    # email_rpa = Email_Utils(mail_receivers = "digital_scm@us.q-cells.com")
+    # while True:
+    #     print('[ITERATION] {} MAIL RPA ON WORKING NOW'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    #     email_rpa.recevie_email(
+    #                 check_sd = datetime.now().strftime('%Y-%m-%d'), 
+    #                 download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
+    #                 saveYN = True)
+    #     time.sleep(60)
+
+    ed = Email_detect()
     while True:
-        print('[ITERATION] {} MAIL RPA ON WORKING NOW'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        email_rpa.recevie_email(
-                    check_sd = datetime.now().strftime('%Y-%m-%d'), 
-                    download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
-                    saveYN = True)
-        time.sleep(60)
-
-#Threading is not available
-
+        ed.rpa_email(check_sd = datetime.now().strftime('%Y-%m-%d'), 
+                download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
+                saveYN = True)
+        time.sleep(30)
