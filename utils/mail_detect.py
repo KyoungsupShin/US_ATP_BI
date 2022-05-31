@@ -46,7 +46,6 @@ class Email_detect(Email_Utils):
                     self.write_logs(att.FileName, 'PASS', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse)                
                 self.i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
         except:
-            #ROLL BACK 추가 할 것
             raise ValueError('RPAError:DURING UPDATEING DATA, SOMETHING WENT WRONG.')
 
     def reset_master_check(self):
@@ -80,11 +79,14 @@ class Email_detect(Email_Utils):
         print(self.i.subject) # mail title
         print(self.i.Sender, self.sender_addr, self.i.CC) #mail sender
         if saveYN == True:
-            self.save_attachments_dummy(self.att, self.i)
+            self.save_attachments(self.att, self.i)
             self.write_logs(self.att.FileName, 'PASS', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse)
         if self.mail_moved_YN == False:
             self.i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
             self.mail_moved_YN = True
+
+    def batch_data_ETL(self):
+        ETL_Pipelines(mail_category = 'GOC_ALLOC_PLAN').GOC_ALLOC_PLAN_ETL()
 
     def rpa_email(self, check_sd, download_filetype, saveYN):
         self.access_mailbox()
@@ -111,8 +113,9 @@ class Email_detect(Email_Utils):
                                 for self.att in self.atts:
                                     similarity, isdomainsame, self.mail_category_parse = self.invalidate_whitelist(self.i.subject, self.att.FileName, self.sender_addr)
                                     if (similarity > self.similarity_threshold) & (isdomainsame == True):
-                                        self.normal_attach_check(saveYN)
-                                        continue                    
+                                        if self.mail_category_parse != 'None':
+                                            self.normal_attach_check(saveYN)
+                                            continue                    
                 else:
                     self.i.Delete()
 
