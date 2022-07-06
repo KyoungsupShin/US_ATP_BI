@@ -9,18 +9,16 @@ import threading
 import time
 
 if __name__ == '__main__':
-    # email_rpa = Email_Utils(mail_receivers = "digital_scm@us.q-cells.com")
-    # while True:
-    #     print('[ITERATION] {} MAIL RPA ON WORKING NOW'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-    #     email_rpa.recevie_email(
-    #                 check_sd = datetime.now().strftime('%Y-%m-%d'), 
-    #                 download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
-    #                 saveYN = True)
-    #     time.sleep(60)
-
     ed = Email_detect()
-    while True:
-        ed.rpa_email(check_sd = datetime.now().strftime('%Y-%m-%d'), 
-                download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
-                saveYN = True)
-        time.sleep(30)
+    try:
+        while True:
+            ed.rpa_email(check_sd = datetime.now().strftime('%Y-%m-%d'), 
+                    download_filetype = ['xlsx', 'xlsb', 'xlsm', 'csv'], 
+                    saveYN = True)
+            time.sleep(30)
+    except Exception as e:
+        if str(e) != 'KeyboardInterrupt':
+            ed.write_error_logs(error_name = 'RPAError: OUTLOOK MAIL BOX ERROR.' + str(e), 
+                        error_type = 'RPAError')
+    finally:
+        ed.health_check_logs('RPA', 0)

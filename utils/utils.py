@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import pyodbc
 from datetime import datetime
 import win32com
 import win32com.client
@@ -10,105 +9,13 @@ import itertools
 import os
 from difflib import SequenceMatcher
 import xlrd
+import urllib
 from datetime import timedelta
-
-class Global(object):
-    root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI'
-    driver= '{ODBC Driver 17 for SQL Server}'  
-    atp_server = 'qcells-us-atp-db-server.database.windows.net'
-    atp_database = 'us-qcells-atp-db'
-    atp_username = 'qcells'
-    atp_password = '{Asdqwe123!@#}'   
-    qsp_server = '11.0.40.144'
-    qsp_database = 'master'
-    qsp_username = 'qspdev_user'
-    qsp_password = '{QsxdRqsp123!#*}'   
-
-class DB_Utils():
-    def connect_qspdb(self):
-        try:
-            self.qsp_conn = pyodbc.connect('DRIVER='+Global.driver
-                                    +';SERVER=tcp:'+Global.qsp_server
-                                    +';PORT=1433;DATABASE='+Global.qsp_database
-                                    +';UID='+Global.qsp_username
-                                    +';Pwd='+Global.qsp_password)
-            self.qsp_cursor = self.conn.cursor()
-        except:
-            raise ConnectionError('ConnectionError:AZURE DB CONNECTION FAILED')
-
-    def connect_azuredb(self):
-        try:
-            self.conn = pyodbc.connect('DRIVER='+Global.driver
-                                    +';SERVER=tcp:'+Global.atp_server
-                                    +';PORT=1433;DATABASE='+Global.atp_database
-                                    +';UID='+Global.atp_username
-                                    +';Pwd='+Global.atp_password
-                                    +';Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')
-            self.cursor = self.conn.cursor()
-        except:
-            raise ConnectionError('ConnectionError:AZURE DB CONNECTION FAILED')
-
-    def fetch_data(self, sql):
-        try:
-            self.cursor.execute(sql)
-            row = self.cursor.fetchall()
-            row = [list(i) for i in row]
-            col_names = [item[0] for item in self.cursor.description]
-            return pd.DataFrame(row, columns=col_names)
-        except:
-            raise ConnectionError('ConnectionError:RPA FAILED TO FETCH DATA TO AZURE DB TABLES')
-
-    def insert_dataframe(self, tablename, df, writer = False):
-        self.connect_azuredb()
-        self.error_check = []
-        columns = df.columns.tolist()
-        if writer == True:
-            columns.append('Writer')
-            df['Writer'] = self.writer
-        cols_join = ', '.join(str(x) for x in columns)
-        print('[EVENT] INSERT INFO: \n', '\t TABLE NAME: ', tablename, '\n', '\t TABLE COLUMNS ARE BELOW', columns)
-        for i in range(len(df)):
-            try:
-                time.sleep(0.01)
-                sql = f'''INSERT INTO {tablename} ({cols_join}) VALUES {tuple(df[columns].values[i])}'''                
-                self.cursor.execute(sql)
-            except Exception as e:                
-                print(e)
-                print(sql)
-                self.error_check.append(str(e))
-                pass
-        self.conn.commit()
-        self.conn.close() 
-
-class QSP_MasterCode(DB_Utils):
-    def __init__(self):
-        #connect db
-        self.isUpadted = False
-        self.connect_azuredb()
-        self.connect_qspdb()
-
-    def check_isUpdated(self):
-        #search data count & compare qty
-        sql_qsp = '''
-            select count(1) from qsp_master_code
-            '''
-        sql_atp = '''
-            select count(1) from atp_master_code
-            '''
-        qsp_master_code_qty = self.fetch_data(sql_qsp).values()[0][0]
-        atp_master_code_qty = self.fetch_data(sql_qsp).values()[0][0]
-        if qsp_master_code_qty - atp_master_code_qty > 0:
-            self.isUpadted = True
-        else:
-            self.isUpadted = False
-
-    def update_master_code(self):
-        if self.isUpadted == True:
-            sql = 'select * from qsp_master_code'
-            master_data = self.fetch_data(self)
-            self.insert_dataframe(master_data)
-        self.conn.close()
-        self.isUpadted = False
+from sqlalchemy import create_engine
+from tqdm import tqdm
+import warnings
+from db_conns import Global, DB_Utils
+from data_manipulation import Manipluations
 
 class Master_Reset(DB_Utils):
     def check_isadmin(self):
@@ -123,20 +30,19 @@ class Master_Reset(DB_Utils):
         try:
             self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl')
             for sheet in self.master_df.sheet_names:
-                if (sheet != 'US_CITY_CODE') and (sheet != 'CW_CALENDER') and (sheet != 'ITEM_CODE_MASTER') and (sheet != 'POWER_CLASS_DIST'):
+                if (sheet != 'US_CITY_CODE') and (sheet != 'CW_CALENDER') and (sheet != 'POWER_CLASS_DIST'):
                     sql = 'DELETE FROM {}'.format(sheet)
                     self.cursor.execute(sql)
                     self.conn.commit()
         except Exception as e :
-            raise ValueError('MasterResetError:WHILE RESETTING MASTER TABLES, THERE WAS AN ERROR. \n', str(e))
+            raise ValueError('MasterResetError: WHILE RESETTING MASTER TABLES, THERE WAS AN ERROR. <br>', str(e))
 
     def push_data(self):
         try:
             print('[EVENT] NEW MASTER DATA IS BEING SAVED !')
             for sheet_name in self.master_df.sheet_names:
-                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'CW_CALENDER') and (sheet_name != 'ITEM_CODE_MASTER') and (sheet_name != 'POWER_CLASS_DIST'):
+                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'CW_CALENDER') and (sheet_name != 'POWER_CLASS_DIST'):
                     df = pd.ExcelFile(self.file_path,engine='openpyxl').parse(sheet_name)
-                    # df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
                     df = df.dropna(how='all', axis='columns')
                     df.dropna(inplace = True, how = 'all')
                     df.fillna('', inplace = True)
@@ -145,11 +51,12 @@ class Master_Reset(DB_Utils):
                     if sheet_name == 'CW_CALENDER':
                         df['Friday'] = df['Friday'].astype('str')
                     if sheet_name == 'TARIFF_INFO':
-                        df = self.unpivot_taiffinfo(df)
+                        df = df = df.melt(id_vars = ['Year', 'Month', 'YYYYMM'], value_vars=df.columns[3:]).rename(columns = {'variable' : 'FactoryCd', 
+                                                                                                                                'value' : 'TariffCd'})
                     self.insert_dataframe(sheet_name, df)
             print('\n')
         except Exception as e:
-            raise ValueError('MasterResetError:WHILE PUSHING DATA TO MASTER TABLES, THERE WAS AN ERROR. \n', str(e))
+            raise ValueError('MasterResetError: WHILE PUSHING DATA TO MASTER TABLES, THERE WAS AN ERROR. <br>', str(e))
 
     def unpivot_powerclassdist(self, df):
         power_df = pd.melt(df, id_vars=['FactoryCd','Product_Name', 'SAP_UNIQUE_CODE', 'Power_Class', 'Segment'], value_vars=df.columns[5:])
@@ -157,35 +64,23 @@ class Master_Reset(DB_Utils):
         power_df.YYYYMM = power_df.YYYYMM.astype('str')
         return power_df
         
-    def unpivot_taiffinfo(self, df):
-        df = df.melt(id_vars = ['Year', 'Month', 'YYYYMM'], value_vars=df.columns[3:]).rename(columns = {'variable' : 'FactoryCd', 'value' : 'TariffCd'})
-        return df
-
     def master_reset_main(self, sender_addr, file_path = Global.root_path+'/data/master.xlsx'): 
         self.file_path = file_path
         self.reset_master_tables()
         self.push_data()
 
-class ETL_Utils(DB_Utils):
-    def meta_sheet_info(self, excel_name):
+class ETL_Utils(DB_Utils, Manipluations):
+    def meta_sheet_info(self):
         self.connect_azuredb()
-        self.excel_name= excel_name
-        sql = f'''select sheetlist, targetcolumns, datatype from SHEET_INFO
-                where MailCategory = '{excel_name}' and BackUpYN = 'Y' '''
+        sql = f'''select sheetlist, targetcolumns, datatype, NullCheck from SHEET_INFO
+                where MailCategory = '{self.mail_category}' '''
         self.sheet_info = self.fetch_data(sql)
         self.target_sheet_list = list(set(self.sheet_info['sheetlist'].tolist()))
         self.conn.close()
 
-    def order_status_column_filter(self):
-        self.df.columns = [col.split('(')[0].rstrip() for col in self.df.columns]
-        self.df.rename(columns = {'Task Name' : 'CustomerPO_Num'
-                            , 'Task ID' : 'CR_Num'}, inplace = True)
-
     def read_rpa_excel_file(self, path, engine, sheet_name):
         time.sleep(1)
         skiprows = 0
-        if self.excel_name == 'ORDER_STATUS_REPORT':
-            skiprows = 2
         while True:
             try:
                 print('[WARNING] {} / {} EXCEL FILE SKIP ROWS: {}'.format(path, sheet_name, skiprows))
@@ -196,16 +91,21 @@ class ETL_Utils(DB_Utils):
                 self.df = self.df.loc[:, ~self.df.columns.str.contains('^Unnamed')]
                 break
             except Exception as e:
-                skiprows = skiprows + 1
-                if skiprows > 5:
-                    raise ValueError('PLEASE CHECK OUT THE COLUMN LINE IN {} EXCEL FILE'.format(path)) 
-                print(e)
+                if str(e).split(' ')[0][1:] == 'Worksheet':
+                    sheet_name = 0
+                else:
+                    skiprows = skiprows + 1
+                    if skiprows > 5:
+                        raise ValueError('ExtractDataError: PLEASE CHECK OUT THE SHEET NAME OR COLUMN SKIP LINE IN THIS EXCEL FILE : {} '.format(path)) 
+                    print(e)
                 pass
         self.df = self.df.dropna(how = 'all')
         self.df.columns = [col.strip() for col in self.df.columns]
 
-        if self.excel_name == 'ORDER_STATUS_REPORT':
-            self.order_status_column_filter()
+        if self.mail_category == 'ORDER_STATUS_REPORT':
+            self.df.columns = [col.split('(')[0].rstrip() for col in self.df.columns]
+            self.df.rename(columns = {'Task Name' : 'CustomerPO_Num'
+                                , 'Task ID' : 'CR_Num'}, inplace = True)
         self.df = self.df[self.sheet_info.targetcolumns.tolist()]
         return self.df
 
@@ -228,124 +128,57 @@ class ETL_Utils(DB_Utils):
                 self.df['Updated_Date'] = self.check_date_sql
                 print('[EVENT] EXCEL FILE DOES NOT HAVE UPDATED_DATE COLUMN. RPA WILL CREATE. UPDATE_DATE: {}'.format(self.check_date_sql))
         except Exception as e:
-            raise KeyError('ExtractDataError:' + str(e))
+            raise KeyError('ExtractDataError: WHILE READING EXCEL FILE ERROR OCCURED <br>' + str(e))
 
     def Check_file_is_updated(self):        
         self.connect_azuredb()
         sql = f'''
-                SELECT COUNT(1) FROM {self.excel_name}
+                SELECT COUNT(1) FROM {self.mail_category}
                 WHERE Updated_Date = '{self.check_date_sql}' '''
         sql2 = f'''
-                DELETE FROM {self.excel_name}
+                DELETE FROM {self.mail_category}
                 WHERE Updated_Date = '{self.check_date_sql}' '''
 
         if int(self.fetch_data(sql).values[0][0]) > 1:
-            print('[EVENT] {} DATASET HAS ALREADY SAVED TODAY. RPA IS INITIALIZING NOW'.format(self.excel_name))
+            print('[EVENT] {} DATASET HAS ALREADY SAVED TODAY. RPA IS INITIALIZING NOW'.format(self.mail_category))
             self.cursor.execute(sql2)
             self.conn.commit() 
         else:
             pass
         self.conn.close()
 
-    def ETL_error_check(self):
-        self.connect_azuredb()
-        if len(self.error_check) > 1:
-            print('[WARNING] DURING ETL ERROR OCCURRED. WARNING MAIL SENDING')
-            sql = f'''select MailAddr from ADMIN_INFO WHERE RnR = 'Dev' '''
-            checkisadmin = self.fetch_data(sql)
-            raise KeyError('ExtractDataError: ERROR INFORMING DURING ETL PROCESSING')
-        self.conn.close()
-
-    def yyyymmdd_datetime(self, x):
-        if len(x) == 0: #fully string data ex) TBD
-            return ''
-        if pd.isna(x): # nan value filter
-            return '' 
-        try:
-            if pd.isnull(np.datetime64(x)): #NAT value filter
-                return ''    
-        except:
-            pass
-        x = str(x)
-        removal_string = ['/', '.', '-', '_', ' ']    
-        for rs in removal_string:
-            x = x.replace(rs, '')
-        if len(x) == 6:
-            x = x + '01'
-        else:
-            x = x[:8]
-        try:
-            return datetime.strftime(datetime.strptime(x, '%m%d%Y'), '%Y-%m-%d')
-        except:
-            try:
-                return datetime.strftime(datetime.strptime(x, '%Y%m%d'), '%Y-%m-%d')
-            except:
-                return ''
-                pass
-            pass
-
-    def data_int(self, x):
-        if pd.isna(x):
-            return 0
-        elif (type(x) != int) or (type(x) != float):
-            try:
-                return int(x)
-            except:
-                return 0 
-                pass
-        else:
-            return int(x)
-
-    def data_float(self, x):
-        try:
-            if type(x) == str:
-                x = re.findall(r'\d+', x)
-                if len(x) == 0:
-                    return 0
-                else:
-                    return float(x)
-            elif type(x) == int:
-                return float(x)
-            elif pd.isna(x):
-                return 0
-            else: 
-                return x
-        except:
-            return 0
-            pass
-    
-    def data_text(self, x):
-        if pd.isna(x):
-            return ''
-        else:
-            x = str(x)
-            x = x.replace("'", "")
-            if len(x) > 150:
-                return x[:100]
-            else:
-                return x
-
-    def data_null_check(self, *args):
-        self.null_check = False
-        if len(args) > 0: 
-            isNull_check_result = [i for i in args if len(str(i)) == 0]
-            if len(isNull_check_result) > 0:
-                self.null_check = True
-                raise ValueError('TransformDataError: THERE IS NULL ROWS. NEED TO CHECK.')
-            else:
-                pass
+    def data_null_check(self):
+        print("[EVENT] RPA ETL {} FILE iS ABOUT TO NULL-CHECK.".format(self.mail_category))        
+        nullcheck_total_result = []
+        nullcheck_cols = self.sheet_info[self.sheet_info['NullCheck'] == 'Y']['targetcolumns'].tolist()
+        print('[EVENT] NULL CHECK COLUMNS iS BELOW: \n ', nullcheck_cols)
+        
+        if len(nullcheck_cols) > 0:
+            for ncols in nullcheck_cols:
+                nullcheck_result = self.df[ncols].isnull().sum() + len(self.df[self.df[ncols] == ''])
+                if nullcheck_result > 1:
+                    print('[EVENT] {} FILE, {} COLUMN NULL CHECKING RESULT IS : {}'.format(self.mail_category, ncols, nullcheck_result))
+                    nullcheck_total_result.append([ncols, nullcheck_result])
+                
+            if len(nullcheck_total_result) > 0:
+                nullcheck_total_result = ['{} : {} ROWS MISSED'.format(i[0], i[1]) for i in nullcheck_total_result]
+                nullcheck_total_result = ' <br> '.join(nullcheck_total_result)
+                print('[WARNING] THIS ATTACHMENT HAS AN NULL VALUES.')
+                content_body = 'DataNullWarning: {} FILE, NULL CHECKING RESULT : <br> {}'.format(self.mail_category, nullcheck_total_result)
+                self.write_error_logs(error_name = content_body, error_type = content_body.split(':')[0], excel_name = self.mail_category, 
+                                        Mail_Sender = self.writer)
 
     def read_date(self, date):
         return xlrd.xldate.xldate_as_datetime(date, 0)
 
     def data_prod_plan_clean(self):
-        self.excel_name = 'GA_PROD_PLAN'
+        print('[EVENT] GA PRODUCTION PLAN ETL ON PROGRESS. IT NEEDS TO BE UN-PIVOT.')
         self.df = pd.read_excel(self.saved_path
-                            , engine='pyxlsb'
-                            , sheet_name = 'Revised_Detail PSI (item code)'
-                            , skiprows= 4)
+                                    , engine='pyxlsb'
+                                    , sheet_name = 'Revised_Detail PSI (item code)'
+                                    , skiprows= 4)
         self.df = self.df.dropna(how='all', axis='columns')
-        self.df = self.df[self.df['Curr/Futu Prod.'] !='X']
+        self.df = self.df[(self.df['Curr/Futu Prod.'] !='X')]
         self.df = self.df[self.df['MODEL'].notna()]
         self.df = self.df[self.df['category'] == 'W/H IN (생산)']
         self.df = self.df.drop(['category', 'Grade','Cell type', 'J.Box', 'Curr/Futu Prod.'], axis = 1)
@@ -355,18 +188,18 @@ class ETL_Utils(DB_Utils):
         self.df = self.df.dropna()
         self.df['variable'] = self.df['variable'].apply(lambda x:self.yyyymmdd_datetime(str(x)))
         self.df = self.df.rename(columns = {'MODEL' : 'ProductName',
-                            'Power' : 'Power_Class',
-                            'Item code' : 'Item_Code',
-                            'variable' : 'Product_Plan_Date', 
-                            'value' : 'MW'})
-    
+                                            'Power' : 'Power_Class',
+                                            'Item code' : 'Item_Code',
+                                            'variable' : 'Product_Plan_Date', 
+                                            'value' : 'MW'})
+
     def clean_data_text(self, func):
         try:
             target_columns_text = self.sheet_info[self.sheet_info['datatype'] == 'TEXT']['targetcolumns'].tolist()
             for col in target_columns_text:
                 self.df[col] = self.df[col].apply(lambda x:func(x))
         except Exception as e:
-            raise KeyError('TransformDataError: {} file {} column[text] \n'.format(self.saved_path, col) + str(e))
+            raise KeyError('TransformDataError: {} file {} column[text] <br>'.format(self.saved_path, col) + str(e))
 
     def clean_data_int(self, func):
         try:
@@ -374,7 +207,7 @@ class ETL_Utils(DB_Utils):
             for col in target_columns_int:
                 self.df[col] = self.df[col].apply(lambda x:func(x))
         except Exception as e:
-            raise KeyError('TransformDataError: {} file {} column[int] \n'.format(self.saved_path, col) + str(e))
+            raise KeyError('TransformDataError: {} file {} column[int] <br>'.format(self.saved_path, col) + str(e))
 
     def clean_data_float(self, func):
         try:
@@ -382,7 +215,7 @@ class ETL_Utils(DB_Utils):
             for col in target_columns_float:
                 self.df[col] = self.df[col].apply(lambda x:func(x))
         except Exception as e:
-            raise KeyError('TransformDataError: {} file {} column[float] \n'.format(self.saved_path, col) + str(e))
+            raise KeyError('TransformDataError: {} file {} column[float] <br>'.format(self.saved_path, col) + str(e))
 
     def clean_data_datetime(self, func):
         self.connect_azuredb()
@@ -391,10 +224,28 @@ class ETL_Utils(DB_Utils):
             for col in target_columns_datetime:
                 self.df[col] = self.df[col].apply(lambda x:func(str(x)))        
         except Exception as e:
-            raise KeyError('TransformDataError: {} file {} column[datetime] \n'.format(self.saved_path, col) + str(e))
+            raise KeyError('TransformDataError: {} file {} column[datetime] <br>'.format(self.saved_path, col) + str(e))
 
+    def validate_dataframe(self):
         self.Check_file_is_updated()
-        self.insert_dataframe(self.excel_name, self.df, writer = True)
+        self.data_null_check()
+        self.osr_etd_check()
+        self.insert_dataframe(self.mail_category, self.df, writer = True)
+
+    def osr_etd_check(self):
+        if self.mail_category == 'ORDER_STATUS_REPORT':
+            eu = Email_Utils()
+            eu.connect_azuredb()
+            df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
+            df.to_csv('../data/dummy/error.csv')
+            if len(df) > 1:
+                eu.send_email('[RPA WARNING] OSR ALLOCATION >> OUTBOUND ATD CHECKING NOT VERIFIED'
+                                ,'ERROR MESSAGE'
+                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, OSR ALLOCATION >> OUTBOUND ATD' 
+                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                                ,warning = True
+                                ,excel_name = 'ORDER_STATUS_REPORT')
+            del eu
 
 class ETL_Pipelines(ETL_Utils, DB_Utils):
     def __init__(self, saved_path='', mail_category='', check_date = datetime.now().strftime('%Y-%m-%d'), writer = 'SYSTEM', manual = False):
@@ -403,60 +254,21 @@ class ETL_Pipelines(ETL_Utils, DB_Utils):
         self.check_date_sql = check_date # => dataframe의 updated_date를 참조
         self.writer = writer
         if manual == False:
-            self.main()
+            self.ETL_Basic_Process()
 
     def ETL_Basic_Process(self):
-        self.read_excel(path = self.saved_path)
-        self.data_null_check()
-        self.clean_data_text(self.data_text)
-        self.clean_data_int(self.data_int)
-        self.clean_data_int(int)
-        self.clean_data_float(self.data_float)
-        self.clean_data_float(float)
-        self.clean_data_datetime(self.yyyymmdd_datetime)
-
-    def ON_HAND_ETL(self):
-        self.meta_sheet_info(excel_name = 'ON_HAND')
-        self.ETL_Basic_Process()
-        
-    def ORDER_STATUS_REPORT_ETL(self):
-        self.check_isnull_columns = ['ETD', 'ETA']
-        self.meta_sheet_info(excel_name = 'ORDER_STATUS_REPORT')
-        self.ETL_Basic_Process()
-        
-    def OUT_bound_ETL(self):
-        self.meta_sheet_info(excel_name = 'OUT_BOUND')
-        self.ETL_Basic_Process()
-    
-    def IN_BOUND_OVERSEA_ETL(self):
-        self.meta_sheet_info(excel_name = 'INBOUND_OVERSEA')
-        self.ETL_Basic_Process()
-
-    def IN_BOUND_DOMESTIC_ETL(self):
-        self.meta_sheet_info(excel_name = 'INBOUND_DOMESTIC')
-        self.ETL_Basic_Process()
-
-    def GA_PROD_PLAN_ETL(self):
-        # self.read_excel(path = self.saved_path)        
-        self.data_prod_plan_clean()
-        self.Check_file_is_updated()
-        self.insert_dataframe('GA_PROD_PLAN', self.df, writer = True)
-
-    def main(self):
-        print('[EVENT] DATA ETL PIPELINE JUST BEGAN : {} !'.format(self.mail_category))
-        if self.mail_category == 'INBOUND_OVERSEA':
-            self.IN_BOUND_OVERSEA_ETL()
-        if self.mail_category == 'INBOUND_DOMESTIC':
-            self.IN_BOUND_DOMESTIC_ETL()
-        if self.mail_category == 'OUT_BOUND':
-            self.OUT_bound_ETL()
-        if self.mail_category == 'ON_HAND':
-            self.ON_HAND_ETL()
-        if self.mail_category == 'ORDER_STATUS_REPORT':
-            self.ORDER_STATUS_REPORT_ETL()
+        self.meta_sheet_info()
         if self.mail_category == 'GA_PROD_PLAN':
-            self.GA_PROD_PLAN_ETL()
-        self.ETL_error_check()
+            self.data_prod_plan_clean()
+        else:
+            self.read_excel(path = self.saved_path)
+            self.clean_data_text(self.data_text)
+            self.clean_data_int(self.data_int)
+            self.clean_data_int(int)
+            self.clean_data_float(self.data_float)
+            self.clean_data_float(float)
+            self.clean_data_datetime(self.yyyymmdd_datetime)
+        self.validate_dataframe()
 
 class Email_Utils(Master_Reset, ETL_Utils):
     def __init__(self, mail_receivers =  "digital_scm@us.q-cells.com"):
@@ -467,20 +279,22 @@ class Email_Utils(Master_Reset, ETL_Utils):
         self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
         self.similarity_threshold = 0.5
 
-    def send_email(self, mail_title, content_title, content_body, destination, attachment_path=''):    
+    def send_email(self, mail_title, content_title, content_body, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM'):    
         try:
             with open("../utils/template.html", "r", encoding='utf-8') as f:
                 text= f.read()
             text = text.replace('RPA-TITLE' , content_title)        
-            text = text.replace('RPA-CONTENTS', content_body)        
+            text = text.replace('RPA-CONTENTS', content_body + appendix)        
             Txoutlook = self.outlook.CreateItem(0)
-            Txoutlook.To = destination
+            Txoutlook.To = ';'.join(self.get_admin_address().stack().tolist()) # Destination mail address           
             Txoutlook.Subject = mail_title
             Txoutlook.HTMLBody = f"""{text}"""
             if attachment_path:
                 Txoutlook.Attachments.Add(attachment_path)
             Txoutlook.Send()
-            print('[EVENT] SENT MAIL TO {}'.format(destination))
+            print('[EVENT] SENT MAIL TO {}'.format(';'.join(self.get_admin_address().stack().tolist())))
+            if warning == True:
+                self.write_error_logs(error_name = content_body, error_type = content_body.split(':')[0], excel_name = excel_name)
         except Exception as e:
             raise KeyError('EmailError: THERE WAS AN ERROR DURING SENDING MAIL. ERROR MESSGAE IS: ' + str(e))
 
@@ -497,7 +311,6 @@ class Email_Utils(Master_Reset, ETL_Utils):
         try:
             self.inbox = self.Rxoutlook.GetSharedDefaultFolder(self.recip, 6)
         except:
-            print("[WARNING] OUTLOOK APP WAS RESTARTED. TRYING TO RE-CONNECT")
             self.outlook = win32com.client.Dispatch("Outlook.Application")
             self.Rxoutlook = self.outlook.GetNamespace("MAPI")    
             self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)  
@@ -513,7 +326,6 @@ class Email_Utils(Master_Reset, ETL_Utils):
         self.sender_addr = self.sender_mailaddr_extract(self.i)
 
     def category_replace(self, mail_category_parse):
-        #MAIL LIST SHEET에서 참조함.
         if mail_category_parse.lower() == 'inbound_oversea':
             mail_category_parse = 'INBOUND_OVERSEA'
         elif mail_category_parse.lower() == 'inbound_domestic':
@@ -529,9 +341,8 @@ class Email_Utils(Master_Reset, ETL_Utils):
         else:
             mail_category_parse = 'None'
         return mail_category_parse
-            # raise ValueError('ValueError:THERE IS NO CATEGORY IN THE LIST, ex) inbound -> IN_BOUND')
 
-    def extract_request_update_mail_info(self):
+    def extract_request_update_mail_info(self): #used only  request, update date
         try:
             title_parsed = self.i.subject.lower().split('/')
             mail_category_parse = re.sub(r'[^a-zA-Z]', '', title_parsed[1])
@@ -540,8 +351,8 @@ class Email_Utils(Master_Reset, ETL_Utils):
             if len(title_parsed) >= 3:
                 if len(title_parsed[2]) == 8:
                     self.Req_date = self.yyyymmdd_datetime(title_parsed[2])                
-        except:
-            raise ValueError('EmailError:THERE IS SOMETHING WRONG IN MAIL TITLE FOR PARSING CATEGORIES.')
+        except Exception as e:
+            raise ValueError('EmailError:THERE IS SOMETHING WRONG IN MAIL TITLE FOR PARSING CATEGORIES. <br>', str(e))
 
     def invalidate_whitelist(self, mail_title, attch_name, mail_domain):
         self.connect_azuredb()
@@ -579,31 +390,5 @@ class Email_Utils(Master_Reset, ETL_Utils):
         os.makedirs(saved_dir, exist_ok = True)
         att.SaveAsFile(saved_path)
         ETL_Pipelines(saved_path, self.mail_category_parse, save_date, writer = self.sender_addr.split('@')[0])
+        self.write_logs(self.att.FileName, 'PASS', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse, self.sender_addr.split('@')[0])
 
-    def save_attachments_dummy(self, att, i, save_date = datetime.now().strftime('%Y-%m-%d')):
-        print('[EVENT] SAVED ATTACHMENTS: {}'.format(att.FileName))
-        saved_dir = Global.root_path + '/data/' + save_date
-        saved_path = saved_dir + '/' + att.FileName
-        os.makedirs(saved_dir, exist_ok = True)
-        att.SaveAsFile(saved_path)
-        # saved_path = Global.root_path + '/data/dummy/{}.xlsx'.format(self.mail_category_parse)
-        # ETL_Pipelines(saved_path, self.mail_category_parse, save_date, writer = self.sender_addr.split('@')[0])
-
-    def write_logs(self, FileName, Result, Received_time, ExcelType):
-        print('[EVENT] SAVED ATTACHMENTS LOG WROTTEN IN RPA_DOWNLOAD_LOGS')
-        self.connect_azuredb()
-        sql = f'''INSERT INTO RPA_DOWNLOAD_LOGS (ExcelName, Result, MailReceivedDate, ExcelType)
-                VALUES('{FileName}', '{Result}', '{Received_time}', '{ExcelType}');'''
-        self.cursor.execute(sql)
-        self.conn.commit()
-        self.conn.close()
-
-    def write_error_logs(self, error_name, error_type, Mail_Sender):
-        print('[EVENT] SAVED ATTACHMENTS LOG WROTTEN IN ERROR_LOGS')
-        self.connect_azuredb()
-        sql = f'''INSERT INTO ERORR_LOGS (Error_Name, RPA_Type, Mail_Sender)
-                VALUES('{error_name}', '{error_type}', '{Mail_Sender}');'''
-        print(sql)
-        self.cursor.execute(sql)
-        self.conn.commit()
-        self.conn.close()
