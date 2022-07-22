@@ -21,7 +21,8 @@ class Master_Reset(DB_Utils):
     def check_isadmin(self):
         self.connect_azuredb()
         sql = f'''select count(MailAddr) from ADMIN_INFO 
-                WHERE MailAddr = '{self.sender_addr}' '''
+                WHERE MailAddr = '{self.sender_addr}' AND IsAdmin = 'Y' 
+                '''
         self.checkisadmin = self.fetch_data(sql)
         self.conn.close()
 
@@ -59,7 +60,7 @@ class Master_Reset(DB_Utils):
             raise ValueError('MasterResetError: WHILE PUSHING DATA TO MASTER TABLES, THERE WAS AN ERROR. <br>', str(e))
 
     def unpivot_powerclassdist(self, df):
-        power_df = pd.melt(df, id_vars=['FactoryCd','Product_Name', 'SAP_UNIQUE_CODE', 'Power_Class', 'Segment'], value_vars=df.columns[5:])
+        power_df = pd.melt(df, id_vars=['FactoryCd','Product_Name', 'DummyID', 'SAP_UNIQUE_CODE', 'Power_Class', 'Segment'], value_vars=df.columns[6:])
         power_df = power_df.rename(columns = {'variable' : 'YYYYMM', 'value' : 'Distribution'})
         power_df.YYYYMM = power_df.YYYYMM.astype('str')
         return power_df
@@ -88,7 +89,6 @@ class ETL_Utils(DB_Utils, Manipluations):
                                     , engine=engine
                                     , sheet_name = sheet_name
                                     , skiprows= skiprows)
-                self.df = self.df.loc[:, ~self.df.columns.str.contains('^Unnamed')]
                 break
             except Exception as e:
                 if str(e).split(' ')[0][1:] == 'Worksheet':
@@ -99,9 +99,11 @@ class ETL_Utils(DB_Utils, Manipluations):
                         raise ValueError('ExtractDataError: PLEASE CHECK OUT THE SHEET NAME OR COLUMN SKIP LINE IN THIS EXCEL FILE : {} '.format(path)) 
                     print(e)
                 pass
-        self.df = self.df.dropna(how = 'all')
+        cols = [col for col in self.df.columns if col is not None]
+        self.df = self.df[cols]
+        cols = [col for col in self.df.columns if col[:7] != 'Unnamed']
+        self.df = self.df[cols]
         self.df.columns = [col.strip() for col in self.df.columns]
-
         if self.mail_category == 'ORDER_STATUS_REPORT':
             self.df.columns = [col.split('(')[0].rstrip() for col in self.df.columns]
             self.df.rename(columns = {'Task Name' : 'CustomerPO_Num'
@@ -116,10 +118,11 @@ class ETL_Utils(DB_Utils, Manipluations):
                 self.df = self.read_rpa_excel_file(path,engine='pyxlsb', 
                                         sheet_name=self.target_sheet_list[0])
             elif path.split('.')[-1].lower() == 'csv':
-                self.df = pd.read_csv(path, encoding = 'cp949')
+                self.df = pd.read_csv(path, encoding = 'cp949')                    
             else:
                 self.df = self.read_rpa_excel_file(path,engine='openpyxl', 
                                         sheet_name=self.target_sheet_list[0])        
+            
             if 'Updated_date' in self.df.columns:
                 self.check_date_sql = self.df['Updated_Date'].unique().values[0][0]
                 print('[EVENT] EXCEL FILE HAS UPDATED_DATE COLUMN. UPDATE_DATE: {}'.format(self.check_date_sql))
@@ -244,7 +247,9 @@ class ETL_Utils(DB_Utils, Manipluations):
                                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, OSR ALLOCATION >> OUTBOUND ATD' 
                                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                                 ,warning = True
-                                ,excel_name = 'ORDER_STATUS_REPORT')
+                                ,excel_name = 'ORDER_STATUS_REPORT'
+                                ,RnRs=['OSR', 'PLAN', 'DEV']
+                                )
             del eu
 
 class ETL_Pipelines(ETL_Utils, DB_Utils):
@@ -279,20 +284,26 @@ class Email_Utils(Master_Reset, ETL_Utils):
         self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
         self.similarity_threshold = 0.5
 
-    def send_email(self, mail_title, content_title, content_body, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM'):    
+    def send_email(self, mail_title, content_title, content_body, destination = None, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM', RnRs = ['DEV']):    
         try:
             with open("../utils/template.html", "r", encoding='utf-8') as f:
                 text= f.read()
             text = text.replace('RPA-TITLE' , content_title)        
             text = text.replace('RPA-CONTENTS', content_body + appendix)        
             Txoutlook = self.outlook.CreateItem(0)
-            Txoutlook.To = ';'.join(self.get_admin_address().stack().tolist()) # Destination mail address           
+
+            if destination is None:
+                Txoutlook.To = ';'.join(self.get_admin_address(RnRs).stack().tolist()) # Destination mail address
+                print('[EVENT] SENT MAIL TO {}'.format(';'.join(self.get_admin_address(RnRs).stack().tolist())))
+            else:           
+                Txoutlook.To = str(destination) # Destination mail address           
+                print('[EVENT] SENT MAIL TO {}'.format(str(destination)))
             Txoutlook.Subject = mail_title
             Txoutlook.HTMLBody = f"""{text}"""
             if attachment_path:
                 Txoutlook.Attachments.Add(attachment_path)
             Txoutlook.Send()
-            print('[EVENT] SENT MAIL TO {}'.format(';'.join(self.get_admin_address().stack().tolist())))
+            
             if warning == True:
                 self.write_error_logs(error_name = content_body, error_type = content_body.split(':')[0], excel_name = excel_name)
         except Exception as e:

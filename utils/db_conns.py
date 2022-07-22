@@ -147,10 +147,12 @@ class DB_Utils():
         self.conn.commit()
         self.conn.close()
 
-    def get_admin_address(self):
+    def get_admin_address(self, RnRs = ['DEV']):
+        if len(RnRs) == 1:
+            RnRs.append('DUMMY')
         self.connect_azuredb()
-        sql = '''select MailAddr from ADMIN_INFO ai
-                WHERE RnR in ('DEV' , 'PLAN')'''
+        sql = f'''select MailAddr from ADMIN_INFO ai
+                WHERE RnR in {tuple(RnRs)}'''    
         df_addr = self.fetch_data(sql)
         self.conn.close()
         return df_addr

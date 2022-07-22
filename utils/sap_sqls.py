@@ -1,31 +1,55 @@
+# sql_wh_code_sql = '''
+# SELECT 
+#     tc.CD_VAL3	AS 'WH_Location'
+#     ,tc.CD_NM	AS 'WH_3PL_Name'
+#     ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
+#     ,t2.COMM_CD AS 'SAP_WH_Location_Code'
+#     ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
+#     ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
+# FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
+# LEFT JOIN (
+#     SELECT 
+#         COMM_CD	 
+#         , CD_VAL3 
+#     FROM hanwha_qcells.dbo.TB_CMMNCODE 
+#     WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
+#     ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
+# WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL AND LEFT(tc.COMM_CD, 1) = 'S'
+# ORDER BY tc.SORT_SEQ ASC
+# '''
+
 sql_wh_code_sql = '''
-SELECT 
-    tc.CD_VAL3	AS 'WH_Location'
-    ,tc.CD_NM	AS 'WH_3PL_Name'
-    ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
-    ,t2.COMM_CD AS 'SAP_WH_Location_Code'
-    ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
-    ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
-FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
-LEFT JOIN (
-    SELECT 
-        COMM_CD	 
-        , CD_VAL3 
-    FROM hanwha_qcells.dbo.TB_CMMNCODE 
-    WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
-    ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
-WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL AND LEFT(tc.COMM_CD, 1) = 'S'
-ORDER BY tc.SORT_SEQ ASC
+  SELECT 
+      tc.CD_VAL3	AS 'WH_Location'
+      ,tc.CD_NM	AS 'WH_3PL_Name'
+      ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
+      ,t2.COMM_CD AS 'SAP_WH_Location_Code'
+      ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
+      ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
+  FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
+  LEFT JOIN (
+      SELECT 
+          COMM_CD	 
+          , CD_VAL3 
+      FROM hanwha_qcells.dbo.TB_CMMNCODE 
+      WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
+      ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
+  WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL 
+  AND LEFT(tc.CD_NM COLLATE Korean_Wansung_CS_AS , 2) = LEFT(tc.COMM_CD, 2)
+  ORDER BY tc.SORT_SEQ ASC
 '''
+
 sql_item_code_sql = '''
         SELECT
          TI1.ITEM_NO AS 'Item_Code'
         , ISNULL(TC2.CD_NM,'')                 AS 'ProductName'
         , ISNULL(TI1.POWER_CLS_CD,'')			AS 'Power_Class'        
         , ISNULL(LEFT(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 1)-1),'') AS 'FactoryCd'
-        , CASE WHEN SUBSTRING(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 0) + 1) + 1, 3) ='RES' THEN 'Residential'
-	        WHEN SUBSTRING(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 0) + 1) + 1, 3) ='ULC' THEN 'U&C'
-    			ELSE '' END AS SegmentName
+        , CASE 
+            WHEN SUBSTRING(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 0) + 1) + 1, 3) ='RES' THEN 'Residential'
+            WHEN SUBSTRING(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 0) + 1) + 1, 3) ='ULC' THEN 'U&C'
+            WHEN SUBSTRING(TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, CHARINDEX('_', TI1.DETAIL_NAME, 0) + 1) + 1, 3) ='C&I' THEN 'U&C' 
+            ELSE '' END AS SegmentName
         , ISNULL(REPLACE(TI1.DETAIL_NAME, '_', ' / '),'')	AS 'ProductGroup3'
         , CASE WHEN TI1.ACTIVE_YN = 'Y' THEN 'Active' ELSE 'Inactive' END AS 'UseYN'
         FROM
@@ -97,4 +121,3 @@ sql_atp = '''
     from ATP_BI
 '''
 
-# sql_outbound = 'select * from ATP_OUTBOUND'

@@ -1,5 +1,7 @@
 from utils import *
+from sap_batch import *
 import glob
+from datetime import datetime 
 
 class Email_detect(Email_Utils):
     def request_master_check(self):
@@ -7,46 +9,9 @@ class Email_detect(Email_Utils):
         self.excel_name = 'MASTER'
         self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
                         ,'RETURNING MASTER EXCEL FILE'
+                        ,destination = self.sender_mailaddr_extract(self.i)
                         ,attachment_path = Global.root_path + '/data/master.xlsx')
         self.i.Delete()
-    
-    def request_data_check(self):
-        print('[EVENT] RECEIVED REQUEST XLSX DATA ATTACHMENTS')
-        self.extract_request_update_mail_info()  
-        Req_date_sql = f''' WHERE Updated_Date = '{self.Req_date}' '''
-        self.excel_name = self.mail_category_parse
-        sql = f'''SELECT * FROM {self.mail_category_parse}''' + Req_date_sql
-        self.connect_azuredb()
-        df = self.fetch_data(sql)
-        if len(df) > 0: #if data exists in DB, save backup data as csv file
-            save_path = Global.root_path + '/data/{}/{}_{}.csv'.format(self.Req_date, self.mail_category_parse,datetime.now().strftime('%Y%m%d%H%M%S'))
-            df.to_csv(save_path, index=False)          
-            print('[EVENT] RECEIVED REQUEST {} {} XLSX ATTACHMENTS'.format(self.mail_category_parse, self.Req_date))
-            self.send_email('[RPA] {} FILE SHARING'.format(self.mail_category_parse)
-                            ,'{} FILE REQUEST'.format(self.mail_category_parse)
-                            ,'RETURNING {} EXCEL FILE'.format(self.mail_category_parse)
-                            ,attachment_path=save_path)
-        else: # no data exists in DB
-            print('[EVENT] RECEIVED REQUEST {} XLSX ATTACHMENTS, BUT NO UPDATED DATA'.format(self.mail_category_parse))
-            self.send_email('[RPA] {} FILE SHARING'.format(self.mail_category_parse)
-                            ,'{} FILE REQUEST'.format(self.mail_category_parse)
-                            ,'THERE IS NO UPDATED FILE : {}'.format(self.mail_category_parse))
-        self.i.Delete()
-
-    def update_data_check(self): 
-        print('[EVENT] RECEIVED UPDATE REQUEST')
-        try:
-            self.excel_name=self.mail_category_parse
-            self.extract_request_update_mail_info()  
-            self.check_isadmin()
-            if self.checkisadmin.values[0][0] == 1:
-                print('[EVENT] Manual Update => TARGET: {} / DATE {}'.format(self.mail_category_parse, self.Req_date))
-                for att in self.atts:
-                    # self.save_attachments(att, self.i, self.Req_date)
-                    self.write_logs(att.FileName, 'PASS', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse, self.sender_addr.split('@')[0])                
-                self.i.Move([i for i in self.Rxoutlook.Folders if str(i) == 'ATP_ATTACHMENTS'][0])
-        except:
-            raise ValueError('RPAError:DURING UPDATEING DATA, SOMETHING WENT WRONG.')
 
     def reset_master_check(self):
         print('[EVENT] RECEIVED RESET MASTER XLSX ATTACHMENTS')
@@ -69,7 +34,7 @@ class Email_detect(Email_Utils):
                     except Exception as e:
                         print('[WARNING] MASTER FILE IS DAMAGED. RPA WILL ROLL-BACK.' , '\n', str(e))
                         self.master_reset_main(self.sender_addr, file_path = glob.glob(Global.root_path + '/data/MASTER_HIST/*.xlsx')[-1])
-                        raise ValueError('RPAError:DURING RESETTING MASTER DATA, SOMETHING WENT WRONG.')
+                        raise ValueError('RPAError:DURING RESETTING MASTER DATA, SOMETHING WENT WRONG. \n', str(e))
         else:
             print('[WARNING] SEND E-MAIL. YOUR REQUEST REJECTED DUE TO LOW-AUTHORIZATION')
             raise ValueError('MasterError:SEND E-MAIL. YOUR REQUEST REJECTED DUE TO LOW-AUTHORIZATION.')
@@ -86,31 +51,56 @@ class Email_detect(Email_Utils):
             self.excel_name=self.mail_category_parse
             self.save_attachments(self.att, self.i)
 
+    def sap_batch(self):
+        print('[EVENT] RECEIVED REQUEST MANUAL BATCH UPDATE.')
+        smr = SAP_Master_Reset()
+        smr.read_qspdb()
+        smr.update_sap_data()
+        smr.atp_raw_history_batch()
+        smr.atp_batch()
+        smr.atp_ending_onhand_batch()
+        del smr 
+        self.i.Delete()
+
     def rpa_email(self, check_sd, download_filetype, saveYN):
         try:
             self.access_mailbox()
         except Exception as e:
             self.send_email('[EMAIL APP ERROR] {}'.format(str(e)[1:-1].split(':')[0])
                             ,'ERROR MESSAGE'
-                            , str(e)[1:-1])
+                            , str(e)[1:-1]
+                            , RnRs=['PLAN', 'DEV'] )
             self.write_error_logs(error_name = str(e)[1:-1], error_type = str(e)[1:-1].split(':')[0])
 
         for self.i in self.inbox.items: #inbox mail iteration
-            self.mail_target_extension_filter(download_filetype)
+            try:
+                self.mail_target_extension_filter(download_filetype)
+            except Exception as e:
+                print('Untitled Outlook mail will be deleted automatically. ', str(e))
+                self.i.Delete()
+                continue
             try:
                 if (datetime.now() - datetime.strptime(self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')).days < 1:
                     if self.i.subject.lower().strip() == 'request master':
                         self.request_master_check()
                         continue
-                    elif self.i.subject.lower().split('/')[0].strip() == 'request data':
-                        self.request_data_check()
+                    elif self.i.subject.lower().strip() == 'request batch':
+                        self.sap_batch()
+                        continue
+                    elif self.i.subject.lower().strip() == 'request atp':
+                        print('[EVENT] RECEIVED REQUEST ATP BI BATCH RAW DATASET.')
+                        self.connect_azuredb()
+                        self.fetch_data(sql = 'select * from ATP_BI').to_csv('../data/dummy/atp.csv', encoding='utf-8-sig', index = None)
+                        self.send_email('[RPA] ATP_BI TABLE RAW DATA SHARING'
+                                        ,'ATP_BI TABLE RAW DATA'
+                                        ,'SENDING YOU THE NEWEST ATP BI CSV FILE'
+                                        ,destination = self.sender_mailaddr_extract(self.i)
+                                        ,attachment_path = Global.root_path + '/data/dummy/atp.csv')
+                        self.i.Delete()
                         continue
                     else:
                         if len(self.atts) > 0: #attachment over 1
-                            if self.i.subject.lower().split('/')[0].strip() == 'update data':
-                                self.update_data_check()
-                                continue
-                            elif self.i.subject.lower() == 'reset master':
+                            if self.i.subject.lower() == 'reset master':
                                 self.reset_master_check()
                                 continue
                             else:
@@ -125,7 +115,9 @@ class Email_detect(Email_Utils):
                                     except Exception as e:
                                         self.send_email('[RPA FILE ERROR] {}'.format(str(e).split(':')[0])
                                             ,'ERROR MESSAGE'
-                                            ,self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S') + '<br>' + str(self.i.subject) + ' / ' + str(self.i.Sender) +  '<br>' + str(self.att.FileName) + '<br>' + str(e) )
+                                            ,self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S') + '<br>' + str(self.i.subject) + ' / ' + str(self.i.Sender) +  '<br>' + str(self.att.FileName) + '<br>' + str(e) 
+                                            , RnRs = ['PLAN', 'DEV', '3PL']
+                                            )
                                         print('[WARNING] THIS ATTACHMENT HAS AN ERROR.')
                                         self.write_logs(self.att.FileName, 'FAIL', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse, self.sender_addr.split('@')[0])
                 else:
@@ -134,7 +126,8 @@ class Email_detect(Email_Utils):
             except Exception as e:
                 self.send_email('[EMAIL MODULE ERROR] {}'.format(str(e)[1:-1].split(':')[0])
                                 ,'ERROR MESSAGE'
-                                , str(e)[1:-1])
+                                , str(e)[1:-1]
+                                , RnRs=['PLAN', 'DEV'])
                 self.write_error_logs(error_name = str(e)[1:-1], error_type = str(e)[1:-1].split(':')[0],
                                         Mail_Sender = self.sender_mailaddr_extract(self.i), excel_name=self.excel_name)
         self.health_check_logs('RPA', 1)            
