@@ -31,7 +31,7 @@ class Master_Reset(DB_Utils):
         try:
             self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl')
             for sheet in self.master_df.sheet_names:
-                if (sheet != 'US_CITY_CODE') and (sheet != 'CW_CALENDER') and (sheet != 'POWER_CLASS_DIST'):
+                if (sheet != 'US_CITY_CODE') and (sheet != 'POWER_CLASS_DIST'):
                     sql = 'DELETE FROM {}'.format(sheet)
                     self.cursor.execute(sql)
                     self.conn.commit()
@@ -42,7 +42,7 @@ class Master_Reset(DB_Utils):
         try:
             print('[EVENT] NEW MASTER DATA IS BEING SAVED !')
             for sheet_name in self.master_df.sheet_names:
-                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'CW_CALENDER') and (sheet_name != 'POWER_CLASS_DIST'):
+                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'POWER_CLASS_DIST'):
                     df = pd.ExcelFile(self.file_path,engine='openpyxl').parse(sheet_name)
                     df = df.dropna(how='all', axis='columns')
                     df.dropna(inplace = True, how = 'all')
@@ -232,8 +232,8 @@ class ETL_Utils(DB_Utils, Manipluations):
     def validate_dataframe(self):
         self.Check_file_is_updated()
         self.data_null_check()
-        self.osr_etd_check()
         self.insert_dataframe(self.mail_category, self.df, writer = True)
+        self.osr_etd_check()
 
     def osr_etd_check(self):
         if self.mail_category == 'ORDER_STATUS_REPORT':
@@ -241,15 +241,40 @@ class ETL_Utils(DB_Utils, Manipluations):
             eu.connect_azuredb()
             df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
             df.to_csv('../data/dummy/error.csv')
-            if len(df) > 1:
-                eu.send_email('[RPA WARNING] OSR ALLOCATION >> OUTBOUND ATD CHECKING NOT VERIFIED'
+            if len(df) >= 1:
+                eu.send_email('[RPA WARNING] OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW'
                                 ,'ERROR MESSAGE'
-                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, OSR ALLOCATION >> OUTBOUND ATD' 
+                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW' 
                                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                                 ,warning = True
                                 ,excel_name = 'ORDER_STATUS_REPORT'
                                 ,RnRs=['OSR', 'PLAN', 'DEV']
                                 )
+            eu.connect_azuredb()
+            df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
+            df.to_csv('../data/dummy/error.csv')
+            if len(df) >= 1:
+                eu.send_email('[RPA WARNING] OUTBOUND NOT-DELIVERED AFTER ALLOCATION CW'
+                                ,'ERROR MESSAGE'
+                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO NOT-DELIVERED AFTER ALLOCATION CW' 
+                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                                ,warning = True
+                                ,excel_name = 'ORDER_STATUS_REPORT'
+                                ,RnRs=['OSR', 'PLAN','DEV']
+                                )
+            eu.connect_azuredb()
+            df = eu.fetch_data('select * from OSR_CPO_PCS_CHECK')
+            df.to_csv('../data/dummy/error.csv')
+            if len(df) >= 1:
+                eu.send_email('[RPA WARNING] OUTBOUND PCS IS GREATER THEN OSR PCS'
+                                ,'ERROR MESSAGE'
+                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND PCS IS GREATER THEN OSR PCS' 
+                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                                ,warning = True
+                                ,excel_name = 'ORDER_STATUS_REPORT'
+                                ,RnRs=['PLAN','DEV', '3PL']
+                                )
+
             del eu
 
 class ETL_Pipelines(ETL_Utils, DB_Utils):

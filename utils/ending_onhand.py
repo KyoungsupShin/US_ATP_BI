@@ -170,8 +170,6 @@ class Ending_On_Hand(Email_Utils):
             if year_delta >= 1:
                 return 'Future Week'
             else:
-                # if day_delta >= -7:
-                #     return 'Previous Week'
                 if cw_delta == -1:
                     return 'Previous Week'
                 else:
@@ -192,20 +190,31 @@ class Ending_On_Hand(Email_Utils):
             return 'Future Week'
         else:
             return 'Reconsil Period'
+    def get_yyyy(self, x):
+        return str(x[:4])
 
+            
     def join_ending_onhand(self, df_ending_onhand_result):
         df_ending_onhand_result = pd.merge(df_ending_onhand_result.reset_index(), self.df_itemcode, how = 'left' , on = 'Item_Code').reset_index(drop = True)
         df_ending_onhand_result = pd.merge(df_ending_onhand_result, self.df_wh, how = 'left' , on = 'WH_Location').reset_index(drop = True)
         df_ending_onhand_result['Tariff'] = df_ending_onhand_result['Item_Code'].apply(lambda x:self.get_tariff_rate(x))
         df_ending_onhand_result['CW'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_cw(x))
-        df_ending_onhand_result['YYYYMM'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymm(x))
-        df_ending_onhand_result['YYYYMMDD'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymmdd(x))
+        # df_ending_onhand_result['YYYYMM'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymm(x))
+        # df_ending_onhand_result['YYYYMMDD'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymmdd(x))
         df_ending_onhand_result['Dates'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_dates(x))
         df_ending_onhand_result = df_ending_onhand_result.fillna('')
         df_ending_onhand_result['CW_Type'] = df_ending_onhand_result['Dates'].apply(lambda x:self.date_label(x))
         return df_ending_onhand_result
     
     def main(self):
+        def iso_yyyy(x, cw, rn):
+            if rn >= 2:
+                if int(cw[-2:]) > 25:
+                    return df_ending_onhand_result_join[df_ending_onhand_result_join['RANK_YYYY']==2].YYYY_BI.min()
+                else:
+                    return df_ending_onhand_result_join[df_ending_onhand_result_join['RANK_YYYY']==2].YYYY_BI.max()
+            else:
+                return x
         self.get_atp_data()
         df_ending_onhand_result = pd.DataFrame()
         for self.ic in pd.concat([self.df_atp['Item_Code'], self.df_onhand['Item_Code']]).unique():        
@@ -214,7 +223,12 @@ class Ending_On_Hand(Email_Utils):
             df_finals = self.reshape_ending_onhand(df_finals)
             df_ending_onhand_result = df_ending_onhand_result.append(df_finals)
         df_ending_onhand_result_join = self.join_ending_onhand(df_ending_onhand_result)
-        return df_ending_onhand_result_join
+        df_ending_onhand_result_join['YYYY_BI'] = df_ending_onhand_result_join['Dates'].apply(lambda x:self.get_yyyy(x))
+        df_ending_onhand_result_join['RANK_YYYY'] = df_ending_onhand_result_join.groupby(['CW'])['YYYY_BI'].transform('nunique')
+        df_ending_onhand_result_join['YYYY_BI'] = df_ending_onhand_result_join.apply(lambda x: iso_yyyy(x['YYYY_BI'],x['CW'], x['RANK_YYYY']), axis = 1)
+        col_db = ['WH_Location', 'Item_Code', 'ProductName', 'Power_Class', 'Tariff', 'WestEast', 
+                'Dates', 'CPO_shipped', 'Hard_Allocation', 'Intake', 'ON_HAND', 'Soft_Allocation', 'CW_Type', 'SegmentName', 'YYYY_BI']
+        return df_ending_onhand_result_join[col_db]
 
 if __name__ == '__main__':
     eoh = Ending_On_Hand()

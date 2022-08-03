@@ -95,15 +95,15 @@ class SAP_Master_Reset(Email_Utils):
             df_error = pd.concat([self.df[self.df[i].isna()] for i in nullcheck_cols]).reset_index(drop = True)
             df_error.to_csv('../data/dummy/joinerror.csv', encoding='utf-8-sig',  index = None)
             
-            eu = Email_Utils()
-            eu.send_email('[RPA WARNING] {} JOIN CHECKING NOT VERIFIED'.format(table_name)
-                            ,'ERROR MESSAGE'
-                            ,'JoinNullWarning: {} FILE, JOIN CHECKING RESULT : <br> {}'.format(table_name, nullcheck_total_result)
-                            , attachment_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI/data/dummy/joinerror.csv'
-                            , warning = True
-                            , excel_name = self.excel_name
-                            , RnRs = ['SAP', 'DEV', 'PLAN'])
-            del eu
+            # eu = Email_Utils()
+            # eu.send_email('[RPA WARNING] {} JOIN CHECKING NOT VERIFIED'.format(table_name)
+            #                 ,'ERROR MESSAGE'
+            #                 ,'JoinNullWarning: {} FILE, JOIN CHECKING RESULT : <br> {}'.format(table_name, nullcheck_total_result)
+            #                 , attachment_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI/data/dummy/joinerror.csv'
+            #                 , warning = True
+            #                 , excel_name = self.excel_name
+            #                 , RnRs = ['SAP', 'DEV', 'PLAN'])
+            # del eu
 
     def atp_ending_onhand_batch(self):
         print('[EVENT] STARTING TO SAVE TODAY HISTORY ATP ENDING ONHAND RESULT')
@@ -118,8 +118,9 @@ class SAP_Master_Reset(Email_Utils):
         
 if __name__ == '__main__':
     smr = SAP_Master_Reset()
-    # smr.read_qspdb()
-    # smr.update_sap_data()
-    # smr.atp_raw_history_batch()
-    # smr.atp_batch()
+    smr.read_qspdb()
+    smr.update_sap_data()
+    smr.atp_raw_history_batch()
+    smr.atp_batch()
     smr.atp_ending_onhand_batch()
+    #PR validation add!
