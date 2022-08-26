@@ -1,31 +1,11 @@
-# sql_wh_code_sql = '''
-# SELECT 
-#     tc.CD_VAL3	AS 'WH_Location'
-#     ,tc.CD_NM	AS 'WH_3PL_Name'
-#     ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
-#     ,t2.COMM_CD AS 'SAP_WH_Location_Code'
-#     ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
-#     ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
-# FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
-# LEFT JOIN (
-#     SELECT 
-#         COMM_CD	 
-#         , CD_VAL3 
-#     FROM hanwha_qcells.dbo.TB_CMMNCODE 
-#     WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
-#     ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
-# WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL AND LEFT(tc.COMM_CD, 1) = 'S'
-# ORDER BY tc.SORT_SEQ ASC
-# '''
-
 sql_wh_code_sql = '''
-  SELECT 
-      tc.CD_VAL3	AS 'WH_Location'
-      ,tc.CD_NM	AS 'WH_3PL_Name'
-      ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
-      ,t2.COMM_CD AS 'SAP_WH_Location_Code'
-      ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
-      ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
+SELECT 
+  tc.CD_VAL3	AS 'WH_Location'
+  ,tc.CD_NM	AS 'WH_3PL_Name'
+  ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
+  ,t2.COMM_CD AS 'SAP_WH_Location_Code'
+  ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
+  ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
   FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
   LEFT JOIN (
       SELECT 
@@ -35,9 +15,11 @@ sql_wh_code_sql = '''
       WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
       ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
   WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL 
-  AND LEFT(tc.CD_NM COLLATE Korean_Wansung_CS_AS , 2) = LEFT(tc.COMM_CD, 2)
+  AND (LEFT(tc.CD_NM COLLATE Korean_Wansung_CS_AS , 2) = LEFT(t2.CD_VAL3, 2)) and tc.CD_NM != tc.CD_VAL3
   ORDER BY tc.SORT_SEQ ASC
+
 '''
+
 
 sql_item_code_sql = '''
         SELECT
@@ -120,4 +102,26 @@ sql_atp = '''
         , ISNULL(PO, '') AS PO
     from ATP_BI
 '''
+# '''
+#     select ISNULL(Data_Type, '') AS Data_Type
+#         , ISNULL(기준일자, '') AS 기준일자
+#         , ISNULL(날짜, '') AS 날짜
+#         , ISNULL(YYYYMM, '') AS YYYYMM
+#         , ISNULL(CW, '') AS CW
+#         , ISNULL(ISNULL(제품명, icms.ProductName),'') AS 제품명
+#         , ISNULL(ab.Item_Code, '') AS Item_Code        
+#         , ISNULL(ISNULL(ab.Power_Class, icms.Power_Class),'') AS Power_Class
+#         , ISNULL(WH_Name, '') AS WH_Name
+#         , ISNULL(Tariff, '') AS Tariff
+#         , ISNULL(WestEast, '') AS WestEast
+#         , ISNULL(Intake_Shipments_FCST, '') AS Intake_Shipments_FCST
+#         , ISNULL(Intake_Shipments_ACTUAL, '') AS Intake_Shipments_ACTUAL
+#         , ISNULL(Soft_Allocation, '') AS Soft_Allocation
+#         , ISNULL(Hard_Allocation, '') AS Hard_Allocation
+#         , ISNULL(CPO_shipped, '') AS CPO_shipped
+#         , ISNULL(PO, '') AS PO
+#     from ATP_BI ab
+#     LEFT JOIN ITEM_CODE_MASTER_SAP icms ON 
+#     	LEFT(ab.Item_Code, 8) = LEFT(icms.Item_Code,8)
+# '''
 

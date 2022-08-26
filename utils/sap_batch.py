@@ -8,19 +8,6 @@ import time
 import pandas as pd
 
 class SAP_Master_Reset(Email_Utils):    
-    def read_qspdb(self):
-        self.excel_name = 'SAP_MASTER'
-        self.connect_qspdb()        
-        self.df_wh = self.fetch_data(sql_wh_code_sql)
-        self.df_itemcode = self.fetch_data(sql_item_code_sql)
-        self.conn.close()
-        
-    def initial_table(self):
-        self.cursor.execute('delete from ITEM_CODE_MASTER_SAP')
-        self.cursor.execute('delete from WAREHOUSE_INFO')
-        self.conn.commit()
-        self.conn.close()
-
     def initial_history_table(self, table_name):
         self.connect_azuredb()
         current_date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -34,18 +21,6 @@ class SAP_Master_Reset(Email_Utils):
             self.cursor.execute(init_sql)
             self.conn.commit() 
 
-    def insert_sap_data_to_db(self):
-        print('[EVENT] STARTING TO SYNC SAP MASTER DATA [WAREHOUSE CODE MASTER] [ITEMCODE MASTER]')
-        self.insert_dataframe('WAREHOUSE_INFO', self.df_wh)
-        self.write_logs('WAREHOUSE_INFO', 'PASS', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'SAP')
-        self.insert_dataframe('ITEM_CODE_MASTER_SAP', self.df_itemcode)
-        self.write_logs('ITEM_CODE_MASTER_SAP', 'PASS', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'SAP')
-
-    def update_sap_data(self):
-        self.connect_azuredb()
-        self.initial_table()
-        self.insert_sap_data_to_db()
-        
     def atp_batch(self):
         print('[EVENT] STARTING TO SAVE TODAY HISTORY ATP RESULT')
         self.excel_name = 'ATP_BATCH_HISTORY'
@@ -88,22 +63,28 @@ class SAP_Master_Reset(Email_Utils):
                 print('[EVENT] {} BATCH VIEW, {} COLUMN NULL CHECKING RESULT IS : {}'.format(table_name, ncols, nullcheck_result))
 
         if len(nullcheck_total_result) > 0:
+            for null_col in nullcheck_total_result:
+                null_col = null_col[0]
+                df_error = self.df[(self.df[null_col].isna()) | (self.df[null_col] == '')].reset_index(drop = True)
+                df_error.to_csv(Global.root_path + '/data/dummy/joinError_{}.csv'.format(null_col), encoding='utf-8-sig',  index = None)
+            nullcheck_csv_path = [Global.root_path + '/data/dummy/joinError_{}.csv'.format(i[0]) for i in nullcheck_total_result]
+
             nullcheck_total_result = ['{} : {} ROWS MISSED'.format(i[0], i[1]) for i in nullcheck_total_result]
             nullcheck_total_result = ' <br> '.join(nullcheck_total_result)
             print('[WARNING] THIS ATTACHMENT HAS AN NULL VALUES.')
+            # df_error = pd.concat([self.df[self.df[i].isna()] for i in nullcheck_cols]).reset_index(drop = True)
+            # df_error.to_csv('../data/dummy/joinerror.csv', encoding='utf-8-sig',  index = None)
             
-            df_error = pd.concat([self.df[self.df[i].isna()] for i in nullcheck_cols]).reset_index(drop = True)
-            df_error.to_csv('../data/dummy/joinerror.csv', encoding='utf-8-sig',  index = None)
-            
-            # eu = Email_Utils()
-            # eu.send_email('[RPA WARNING] {} JOIN CHECKING NOT VERIFIED'.format(table_name)
-            #                 ,'ERROR MESSAGE'
-            #                 ,'JoinNullWarning: {} FILE, JOIN CHECKING RESULT : <br> {}'.format(table_name, nullcheck_total_result)
-            #                 , attachment_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI/data/dummy/joinerror.csv'
-            #                 , warning = True
-            #                 , excel_name = self.excel_name
-            #                 , RnRs = ['SAP', 'DEV', 'PLAN'])
-            # del eu
+            eu = Email_Utils()
+            eu.send_email('[RPA WARNING] {} JOIN CHECKING NOT VERIFIED'.format(table_name)
+                            ,'ERROR MESSAGE'
+                            ,'JoinNullWarning: {} FILE, JOIN CHECKING RESULT : <br> {}'.format(table_name, nullcheck_total_result)
+                            , attachment_path = nullcheck_csv_path
+                            , warning = True
+                            , excel_name = self.excel_name
+                            , RnRs = ['SAP', 'DEV', 'PLAN']
+                            )
+            del eu
 
     def atp_ending_onhand_batch(self):
         print('[EVENT] STARTING TO SAVE TODAY HISTORY ATP ENDING ONHAND RESULT')
@@ -115,12 +96,56 @@ class SAP_Master_Reset(Email_Utils):
         self.insert_pd_tosql('ATP_BI_ENDING_ONHAND', df_ending_onhand_result_join)
         self.write_logs('ATP_BI_ENDING_ONHAND', 'PASS', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'HISTORY')
         del eoh
-        
+    
+    def atp_data_check(self):
+        eu = Email_Utils()
+        eu.connect_azuredb()
+        df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
+        if len(df) >= 1:
+            print(df)
+            # eu.send_email('[RPA WARNING] OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW'
+            #                 ,'ERROR MESSAGE'
+            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW' 
+            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+            #                 ,warning = True
+            #                 ,excel_name = 'ORDER_STATUS_REPORT'
+            #                 ,RnRs=['OSR', 'PLAN', 'DEV']
+            #                 )
+        eu.connect_azuredb()
+        df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
+        if len(df) >= 1:
+            print(df)
+
+            # eu.send_email('[RPA WARNING] OUTBOUND NOT-DELIVERED AFTER ALLOCATION CW'
+            #                 ,'ERROR MESSAGE'
+            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO NOT-DELIVERED AFTER ALLOCATION CW' 
+            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+            #                 ,warning = True
+            #                 ,excel_name = 'ORDER_STATUS_REPORT'
+            #                 ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
+            #                 )
+        eu.connect_azuredb()
+        df = eu.fetch_data('select * from OSR_CPO_PCS_CHECK')
+        if len(df) >= 1:
+            print(df)
+
+            # eu.send_email('[RPA WARNING] OUTBOUND PCS IS GREATER THEN OSR PCS'
+            #                 ,'ERROR MESSAGE'
+            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND PCS IS GREATER THEN OSR PCS' 
+            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+            #                 ,warning = True
+            #                 ,excel_name = 'ORDER_STATUS_REPORT'
+            #                 ,RnRs=['PLAN','DEV', '3PL_OUTBOUND', 'OSR']
+            #                 )
+
+        del eu
+
 if __name__ == '__main__':
     smr = SAP_Master_Reset()
-    smr.read_qspdb()
-    smr.update_sap_data()
-    smr.atp_raw_history_batch()
-    smr.atp_batch()
-    smr.atp_ending_onhand_batch()
+    # smr.read_qspdb()
+    # smr.update_sap_data()
+    # smr.atp_raw_history_batch()
+    # smr.atp_batch()
+    # smr.atp_ending_onhand_batch()
+    smr.atp_data_check()
     #PR validation add!

@@ -10,7 +10,9 @@ class Email_detect(Email_Utils):
         self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
                         ,'RETURNING MASTER EXCEL FILE'
                         ,destination = self.sender_mailaddr_extract(self.i)
-                        ,attachment_path = Global.root_path + '/data/master.xlsx')
+                        ,attachment_path = [Global.root_path + '/data/master.xlsx',
+                                            Global.root_path + '/data/WH_Master.csv'])
+        self.read_qspdb(save_YN = True)
         self.i.Delete()
 
     def reset_master_check(self):
@@ -90,7 +92,9 @@ class Email_detect(Email_Utils):
                     elif self.i.subject.lower().strip() == 'request atp':
                         print('[EVENT] RECEIVED REQUEST ATP BI BATCH RAW DATASET.')
                         self.connect_azuredb()
-                        self.fetch_data(sql = 'select * from ATP_BI').to_csv('../data/dummy/atp.csv', encoding='utf-8-sig', index = None)
+                        df = self.fetch_data(sql = 'select * from ATP_BI')
+                        df = df.rename(columns={"기준일자":"Updated_Date", "날짜":"ATP_Date", "제품명" : "Product_Name"})
+                        df.to_csv(Global.root_path + '/data/dummy/atp.csv', encoding='utf-8-sig', index = None)
                         self.send_email('[RPA] ATP_BI TABLE RAW DATA SHARING'
                                         ,'ATP_BI TABLE RAW DATA'
                                         ,'SENDING YOU THE NEWEST ATP BI CSV FILE'
@@ -116,7 +120,7 @@ class Email_detect(Email_Utils):
                                         self.send_email('[RPA FILE ERROR] {}'.format(str(e).split(':')[0])
                                             ,'ERROR MESSAGE'
                                             ,self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S') + '<br>' + str(self.i.subject) + ' / ' + str(self.i.Sender) +  '<br>' + str(self.att.FileName) + '<br>' + str(e) 
-                                            , RnRs = ['PLAN', 'DEV', '3PL']
+                                            , RnRs = ['PLAN', 'DEV']
                                             )
                                         print('[WARNING] THIS ATTACHMENT HAS AN ERROR.')
                                         self.write_logs(self.att.FileName, 'FAIL', self.i.SentOn.strftime('%Y-%m-%d %H:%M:%S'), self.mail_category_parse, self.sender_addr.split('@')[0])

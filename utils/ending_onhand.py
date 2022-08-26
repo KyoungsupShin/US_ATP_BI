@@ -199,8 +199,6 @@ class Ending_On_Hand(Email_Utils):
         df_ending_onhand_result = pd.merge(df_ending_onhand_result, self.df_wh, how = 'left' , on = 'WH_Location').reset_index(drop = True)
         df_ending_onhand_result['Tariff'] = df_ending_onhand_result['Item_Code'].apply(lambda x:self.get_tariff_rate(x))
         df_ending_onhand_result['CW'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_cw(x))
-        # df_ending_onhand_result['YYYYMM'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymm(x))
-        # df_ending_onhand_result['YYYYMMDD'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_yyyymmdd(x))
         df_ending_onhand_result['Dates'] = df_ending_onhand_result['Dates'].apply(lambda x:self.get_dates(x))
         df_ending_onhand_result = df_ending_onhand_result.fillna('')
         df_ending_onhand_result['CW_Type'] = df_ending_onhand_result['Dates'].apply(lambda x:self.date_label(x))

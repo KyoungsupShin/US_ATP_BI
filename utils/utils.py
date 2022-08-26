@@ -31,7 +31,7 @@ class Master_Reset(DB_Utils):
         try:
             self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl')
             for sheet in self.master_df.sheet_names:
-                if (sheet != 'US_CITY_CODE') and (sheet != 'POWER_CLASS_DIST'):
+                if (sheet != 'US_CITY_CODE') and (sheet != 'POWER_CLASS_DIST') and (sheet != 'CW_CALENDER'):
                     sql = 'DELETE FROM {}'.format(sheet)
                     self.cursor.execute(sql)
                     self.conn.commit()
@@ -42,7 +42,7 @@ class Master_Reset(DB_Utils):
         try:
             print('[EVENT] NEW MASTER DATA IS BEING SAVED !')
             for sheet_name in self.master_df.sheet_names:
-                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'POWER_CLASS_DIST'):
+                if (sheet_name != 'US_CITY_CODE') and (sheet_name != 'POWER_CLASS_DIST') and (sheet_name != 'CW_CALENDER'):
                     df = pd.ExcelFile(self.file_path,engine='openpyxl').parse(sheet_name)
                     df = df.dropna(how='all', axis='columns')
                     df.dropna(inplace = True, how = 'all')
@@ -187,6 +187,7 @@ class ETL_Utils(DB_Utils, Manipluations):
         self.df = self.df.drop(['category', 'Grade','Cell type', 'J.Box', 'Curr/Futu Prod.'], axis = 1)
         self.df = self.df.reset_index(drop = True)
         self.df = self.df.melt(id_vars = ['MODEL', 'Power', 'Item code'])
+        self.df = self.df.dropna()
         self.df['variable']= pd.to_datetime(self.df['variable'].apply(self.read_date), errors='coerce')
         self.df = self.df.dropna()
         self.df['variable'] = self.df['variable'].apply(lambda x:self.yyyymmdd_datetime(str(x)))
@@ -221,7 +222,7 @@ class ETL_Utils(DB_Utils, Manipluations):
             raise KeyError('TransformDataError: {} file {} column[float] <br>'.format(self.saved_path, col) + str(e))
 
     def clean_data_datetime(self, func):
-        self.connect_azuredb()
+        self.connect_azuredb()  
         try:
             target_columns_datetime = self.sheet_info[self.sheet_info['datatype'] == 'DATETIME']['targetcolumns'].tolist()
             for col in target_columns_datetime:
@@ -233,14 +234,31 @@ class ETL_Utils(DB_Utils, Manipluations):
         self.Check_file_is_updated()
         self.data_null_check()
         self.insert_dataframe(self.mail_category, self.df, writer = True)
-        self.osr_etd_check()
+        self.data_check_warning_mail()
 
-    def osr_etd_check(self):
+    def data_check_warning_mail(self):
+        if self.mail_category == 'INBOUND_OVERSEA':
+            eu = Email_Utils()
+            eu.connect_azuredb()
+            df = eu.fetch_data('select * from QBIS_INVOICE_CHECK order by InvoiceNo, Item_Code, Updated_Date')
+            if len(df) >= 1:
+                df_html_merge = ''
+                for InvoiceNo in df['InvoiceNo'].unique():
+                    for itemcode in df[df['InvoiceNo'] == InvoiceNo]['Item_Code'].unique():
+                        df_html_merge = df_html_merge + df[(df['InvoiceNo'] == InvoiceNo) & (df['Item_Code'] == itemcode)].to_html(col_space='100%', index=False) + '<br>'        
+                eu.send_email('[RPA WARNING] INBOUND_OVERSEA[STATUS:Onboard] PCS IS GREATER THAN QBIS[STATUS:Onboard] PCS'
+                                ,'ERROR MESSAGE'
+                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> INBOUND_OVERSEA[STATUS:Onboard] PCS IS GREATER THAN QBIS[STATUS:Onboard] PCS' 
+                                ,appendix = df_html_merge.replace('<td>', '<td align="center">')
+                                ,warning = True
+                                ,excel_name = 'INBOUND_OVERSEA'
+                                ,RnRs=['DEV', 'PLAN', '3PL_INBOUND'] 
+                            ) 
+
         if self.mail_category == 'ORDER_STATUS_REPORT':
             eu = Email_Utils()
             eu.connect_azuredb()
             df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
-            df.to_csv('../data/dummy/error.csv')
             if len(df) >= 1:
                 eu.send_email('[RPA WARNING] OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW'
                                 ,'ERROR MESSAGE'
@@ -252,7 +270,6 @@ class ETL_Utils(DB_Utils, Manipluations):
                                 )
             eu.connect_azuredb()
             df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
-            df.to_csv('../data/dummy/error.csv')
             if len(df) >= 1:
                 eu.send_email('[RPA WARNING] OUTBOUND NOT-DELIVERED AFTER ALLOCATION CW'
                                 ,'ERROR MESSAGE'
@@ -260,11 +277,10 @@ class ETL_Utils(DB_Utils, Manipluations):
                                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                                 ,warning = True
                                 ,excel_name = 'ORDER_STATUS_REPORT'
-                                ,RnRs=['OSR', 'PLAN','DEV']
+                                ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
                                 )
             eu.connect_azuredb()
             df = eu.fetch_data('select * from OSR_CPO_PCS_CHECK')
-            df.to_csv('../data/dummy/error.csv')
             if len(df) >= 1:
                 eu.send_email('[RPA WARNING] OUTBOUND PCS IS GREATER THEN OSR PCS'
                                 ,'ERROR MESSAGE'
@@ -272,7 +288,7 @@ class ETL_Utils(DB_Utils, Manipluations):
                                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                                 ,warning = True
                                 ,excel_name = 'ORDER_STATUS_REPORT'
-                                ,RnRs=['PLAN','DEV', '3PL']
+                                ,RnRs=['PLAN','DEV', '3PL_OUTBOUND', 'OSR']
                                 )
 
             del eu
@@ -326,7 +342,11 @@ class Email_Utils(Master_Reset, ETL_Utils):
             Txoutlook.Subject = mail_title
             Txoutlook.HTMLBody = f"""{text}"""
             if attachment_path:
-                Txoutlook.Attachments.Add(attachment_path)
+                if type(attachment_path) == str:
+                    Txoutlook.Attachments.Add(attachment_path)
+                else:
+                    for att in attachment_path:
+                        Txoutlook.Attachments.Add(att)
             Txoutlook.Send()
             
             if warning == True:

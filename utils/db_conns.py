@@ -12,6 +12,7 @@ from datetime import timedelta
 from sqlalchemy import create_engine
 from tqdm import tqdm
 import warnings
+from sap_sqls import *
 
 class Global(object):
     root_path = 'C:/Users/qcells/Desktop/ATP/US_ATP_BI'
@@ -156,3 +157,32 @@ class DB_Utils():
         df_addr = self.fetch_data(sql)
         self.conn.close()
         return df_addr
+
+    def read_qspdb(self, save_YN = False):
+        self.excel_name = 'SAP_MASTER'
+        self.connect_qspdb()        
+        self.df_wh = self.fetch_data(sql_wh_code_sql)
+        self.df_itemcode = self.fetch_data(sql_item_code_sql)
+        if save_YN == True:
+            self.df_wh.to_csv(Global.root_path + '/data/WH_Master.csv')
+            self.df_itemcode.to_csv(Global.root_path + '/data/Item_Code_Master.csv')
+            print('SAP MASTER SAVED.')
+        self.conn.close()
+        
+    def initial_table(self):
+        self.cursor.execute('delete from ITEM_CODE_MASTER_SAP')
+        self.cursor.execute('delete from WAREHOUSE_INFO')
+        self.conn.commit()
+        self.conn.close()
+
+    def insert_sap_data_to_db(self):
+        print('[EVENT] STARTING TO SYNC SAP MASTER DATA [WAREHOUSE CODE MASTER] [ITEMCODE MASTER]')
+        self.insert_dataframe('WAREHOUSE_INFO', self.df_wh)
+        self.write_logs('WAREHOUSE_INFO', 'PASS', datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'SAP')
+        self.insert_dataframe('ITEM_CODE_MASTER_SAP', self.df_itemcode)
+        self.write_logs('ITEM_CODE_MASTER_SAP', 'PASS', datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'SAP')
+
+    def update_sap_data(self):
+        self.connect_azuredb()
+        self.initial_table()
+        self.insert_sap_data_to_db()

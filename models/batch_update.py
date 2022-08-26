@@ -15,11 +15,12 @@ if __name__ == '__main__':
         while True:
             smr.health_check_logs('BATCH', 1)
             if int(datetime.datetime.now().hour) == 4 and int(datetime.datetime.now().minute) == 2:
-                smr.read_qspdb()
-                smr.update_sap_data()
-                smr.atp_raw_history_batch()
-                smr.atp_batch()
-                smr.atp_ending_onhand_batch()
+                if datetime.datetime.now().weekday() < 6: #except for saturday, sunday 
+                    smr.read_qspdb()
+                    smr.update_sap_data()
+                    smr.atp_raw_history_batch()
+                    smr.atp_batch()
+                    smr.atp_ending_onhand_batch()
             else:
                 print('[ITERATION] SYNC MODULE IS WAITING FOR NEXT BATCH')
             time.sleep(59)
