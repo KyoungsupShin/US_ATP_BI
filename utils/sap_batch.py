@@ -45,7 +45,12 @@ class SAP_Master_Reset(Email_Utils):
             self.excel_name = name[1]        
             print('[EVENT] STARTING TO SAVE TODAY HISTORY {} RESULT'.format(name[0]))
             self.connect_azuredb()
-            self.df = self.fetch_data('select * from {}'.format(name[0]))
+            if name[0] == 'ATP_OUTBOUND':
+                self.df = self.fetch_data('''SELECT * FROM ATP_OUTBOUND 
+                                             WHERE Logi_Status not like 'Can%'
+                                             OR CPO_Status NOT IN ('CANCELED', 'CONSUMED')  ''')
+            else:      
+                self.df = self.fetch_data('select * from {}'.format(name[0]))
             self.data_null_check(name[0], name[2])
             self.initial_history_table(name[1])        
             self.insert_pd_tosql(name[1], self.df)
@@ -66,19 +71,23 @@ class SAP_Master_Reset(Email_Utils):
             for null_col in nullcheck_total_result:
                 null_col = null_col[0]
                 df_error = self.df[(self.df[null_col].isna()) | (self.df[null_col] == '')].reset_index(drop = True)
+                if table_name == 'ATP_OUTBOUND':
+                    df_error.rename(columns = {'WH_Code' : 'WH_Location'}, inplace = True)
                 df_error.to_csv(Global.root_path + '/data/dummy/joinError_{}.csv'.format(null_col), encoding='utf-8-sig',  index = None)
             nullcheck_csv_path = [Global.root_path + '/data/dummy/joinError_{}.csv'.format(i[0]) for i in nullcheck_total_result]
 
             nullcheck_total_result = ['{} : {} ROWS MISSED'.format(i[0], i[1]) for i in nullcheck_total_result]
             nullcheck_total_result = ' <br> '.join(nullcheck_total_result)
             print('[WARNING] THIS ATTACHMENT HAS AN NULL VALUES.')
-            # df_error = pd.concat([self.df[self.df[i].isna()] for i in nullcheck_cols]).reset_index(drop = True)
-            # df_error.to_csv('../data/dummy/joinerror.csv', encoding='utf-8-sig',  index = None)
             
             eu = Email_Utils()
-            eu.send_email('[RPA WARNING] {} JOIN CHECKING NOT VERIFIED'.format(table_name)
+            eu.send_email('[ATP] {} item codes & warehouses not on SAP master'.format(table_name)
                             ,'ERROR MESSAGE'
-                            ,'JoinNullWarning: {} FILE, JOIN CHECKING RESULT : <br> {}'.format(table_name, nullcheck_total_result)
+                            ,f'''Instructions: Please check the attached cases and <br> 
+                             (1) add any blank item codes or WH_codes, or/and 
+                             <br> (2) fix incorrect item codes or WH_codes, or/and 
+                             <br> (3) if new item codes, add them to SAP
+                             <br><br> {table_name} FILE, JOIN CHECKING RESULT : <br> {nullcheck_total_result}'''
                             , attachment_path = nullcheck_csv_path
                             , warning = True
                             , excel_name = self.excel_name
@@ -102,41 +111,51 @@ class SAP_Master_Reset(Email_Utils):
         eu.connect_azuredb()
         df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
         if len(df) >= 1:
-            print(df)
-            # eu.send_email('[RPA WARNING] OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW'
-            #                 ,'ERROR MESSAGE'
-            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW' 
-            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-            #                 ,warning = True
-            #                 ,excel_name = 'ORDER_STATUS_REPORT'
-            #                 ,RnRs=['OSR', 'PLAN', 'DEV']
-            #                 )
+            eu.send_email('[ATP] OSR allocation CW in future but outbound already delivered'
+                            ,'ERROR MESSAGE'
+                            ,''' Impact: Both hard allocation and CPO shipped will be counted (Double counted), thus decreasing future available inventory amount.
+                                <br>Instructions: Please update the OSR ALLOC_CW to match Outbount ATD.'''
+                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                            ,warning = True
+                            ,excel_name = 'ORDER_STATUS_REPORT'
+                            ,RnRs=['OSR', 'PLAN', 'DEV', '3PL_OUTBOUND']
+                            )
         eu.connect_azuredb()
         df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
         if len(df) >= 1:
-            print(df)
-
-            # eu.send_email('[RPA WARNING] OUTBOUND NOT-DELIVERED AFTER ALLOCATION CW'
-            #                 ,'ERROR MESSAGE'
-            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO NOT-DELIVERED AFTER ALLOCATION CW' 
-            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-            #                 ,warning = True
-            #                 ,excel_name = 'ORDER_STATUS_REPORT'
-            #                 ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
-            #                 )
+            eu.send_email('[ATP] OSR allocation CW in past, but outbound not delivered'
+                            ,'ERROR MESSAGE'
+                            ,f''' Impact: Hard-allocations will remain in the past so no impact on ATP (These will be moved to shipped once ETD is added)
+                                <br> Instructions: There are {len(df)} POs that have passed the original requested delivery dates. 
+                                <br> Please use this list for your reference.''' 
+                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                            ,warning = True
+                            ,excel_name = 'ORDER_STATUS_REPORT'
+                            ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
+                            )
         eu.connect_azuredb()
         df = eu.fetch_data('select * from OSR_CPO_PCS_CHECK')
         if len(df) >= 1:
-            print(df)
-
-            # eu.send_email('[RPA WARNING] OUTBOUND PCS IS GREATER THEN OSR PCS'
-            #                 ,'ERROR MESSAGE'
-            #                 ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND PCS IS GREATER THEN OSR PCS' 
-            #                 ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-            #                 ,warning = True
-            #                 ,excel_name = 'ORDER_STATUS_REPORT'
-            #                 ,RnRs=['PLAN','DEV', '3PL_OUTBOUND', 'OSR']
-            #                 )
+            eu.send_email('[ATP] Outbound PCS is greater than OSR PCS'
+                            ,'ERROR MESSAGE'
+                            ,''' Impact: Shipped PCS will be greater than hard allocation PCS, thus decreasing future available inventory amount.
+                                <br> Instructions: Please double check the below cases on both OSR & Outbound reports and fix the incorrect PCS count.''' 
+                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                            ,warning = True
+                            ,excel_name = 'ORDER_STATUS_REPORT'
+                            ,RnRs=['PLAN','DEV', 'OSR', '3PL_OUTBOUND']
+                            )
+        eu.connect_azuredb()
+        df = eu.fetch_data('select * from ALLOCATION_NEW_ITEM_CHECK')        
+        if len(df) >= 1:
+            eu.send_email('[RPA WARNING] QBIS ALLOCATION PLAN NEW ITEMCODE CREATED'
+                            ,'ERROR MESSAGE'
+                            ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> QBIS ALLOCATION PLAN NEW ITEMCODE CREATED' 
+                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                            ,warning = True
+                            ,excel_name = 'ORDER_STATUS_REPORT'
+                            ,RnRs=['PLAN','DEV', '3PL_INBOUND']
+                            )
 
         del eu
 
@@ -144,8 +163,8 @@ if __name__ == '__main__':
     smr = SAP_Master_Reset()
     # smr.read_qspdb()
     # smr.update_sap_data()
-    # smr.atp_raw_history_batch()
+    smr.atp_raw_history_batch()
     # smr.atp_batch()
     # smr.atp_ending_onhand_batch()
-    smr.atp_data_check()
+    # smr.atp_data_check()
     #PR validation add!

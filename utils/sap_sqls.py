@@ -102,26 +102,5 @@ sql_atp = '''
         , ISNULL(PO, '') AS PO
     from ATP_BI
 '''
-# '''
-#     select ISNULL(Data_Type, '') AS Data_Type
-#         , ISNULL(기준일자, '') AS 기준일자
-#         , ISNULL(날짜, '') AS 날짜
-#         , ISNULL(YYYYMM, '') AS YYYYMM
-#         , ISNULL(CW, '') AS CW
-#         , ISNULL(ISNULL(제품명, icms.ProductName),'') AS 제품명
-#         , ISNULL(ab.Item_Code, '') AS Item_Code        
-#         , ISNULL(ISNULL(ab.Power_Class, icms.Power_Class),'') AS Power_Class
-#         , ISNULL(WH_Name, '') AS WH_Name
-#         , ISNULL(Tariff, '') AS Tariff
-#         , ISNULL(WestEast, '') AS WestEast
-#         , ISNULL(Intake_Shipments_FCST, '') AS Intake_Shipments_FCST
-#         , ISNULL(Intake_Shipments_ACTUAL, '') AS Intake_Shipments_ACTUAL
-#         , ISNULL(Soft_Allocation, '') AS Soft_Allocation
-#         , ISNULL(Hard_Allocation, '') AS Hard_Allocation
-#         , ISNULL(CPO_shipped, '') AS CPO_shipped
-#         , ISNULL(PO, '') AS PO
-#     from ATP_BI ab
-#     LEFT JOIN ITEM_CODE_MASTER_SAP icms ON 
-#     	LEFT(ab.Item_Code, 8) = LEFT(icms.Item_Code,8)
-# '''
+
 

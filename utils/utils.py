@@ -108,6 +108,8 @@ class ETL_Utils(DB_Utils, Manipluations):
             self.df.columns = [col.split('(')[0].rstrip() for col in self.df.columns]
             self.df.rename(columns = {'Task Name' : 'CustomerPO_Num'
                                 , 'Task ID' : 'CR_Num'}, inplace = True)
+        
+        self.df.columns = [i.title().replace(' ', '_') if len(i.split(' ')) >= 2 else i for i in self.df.columns]
         self.df = self.df[self.sheet_info.targetcolumns.tolist()]
         return self.df
 
@@ -246,52 +248,16 @@ class ETL_Utils(DB_Utils, Manipluations):
                 for InvoiceNo in df['InvoiceNo'].unique():
                     for itemcode in df[df['InvoiceNo'] == InvoiceNo]['Item_Code'].unique():
                         df_html_merge = df_html_merge + df[(df['InvoiceNo'] == InvoiceNo) & (df['Item_Code'] == itemcode)].to_html(col_space='100%', index=False) + '<br>'        
-                eu.send_email('[RPA WARNING] INBOUND_OVERSEA[STATUS:Onboard] PCS IS GREATER THAN QBIS[STATUS:Onboard] PCS'
+                eu.send_email('[CRITICAL][ATP] Inbound_Overseas PCS is greater than QBIS PCS'
                                 ,'ERROR MESSAGE'
-                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> INBOUND_OVERSEA[STATUS:Onboard] PCS IS GREATER THAN QBIS[STATUS:Onboard] PCS' 
+                                , f'''  Impact: In-take shipment will increase, thus increasing future available inventory amount.
+                                        <br> Instructions: There are {str(len(df))} discrepancy cases as below. Please double check the correct PCS and make sure the 3PL data is correct.
+                                        <br> *If QBIS data is incorrect, please coordinate with the relevant team and have them update the data to correct PCS. <br>''' 
                                 ,appendix = df_html_merge.replace('<td>', '<td align="center">')
                                 ,warning = True
                                 ,excel_name = 'INBOUND_OVERSEA'
                                 ,RnRs=['DEV', 'PLAN', '3PL_INBOUND'] 
                             ) 
-
-        if self.mail_category == 'ORDER_STATUS_REPORT':
-            eu = Email_Utils()
-            eu.connect_azuredb()
-            df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
-            if len(df) >= 1:
-                eu.send_email('[RPA WARNING] OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW'
-                                ,'ERROR MESSAGE'
-                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO DELIVERED-DONE BEFORE ALLOCATION CW' 
-                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                                ,warning = True
-                                ,excel_name = 'ORDER_STATUS_REPORT'
-                                ,RnRs=['OSR', 'PLAN', 'DEV']
-                                )
-            eu.connect_azuredb()
-            df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
-            if len(df) >= 1:
-                eu.send_email('[RPA WARNING] OUTBOUND NOT-DELIVERED AFTER ALLOCATION CW'
-                                ,'ERROR MESSAGE'
-                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND CPO NOT-DELIVERED AFTER ALLOCATION CW' 
-                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                                ,warning = True
-                                ,excel_name = 'ORDER_STATUS_REPORT'
-                                ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
-                                )
-            eu.connect_azuredb()
-            df = eu.fetch_data('select * from OSR_CPO_PCS_CHECK')
-            if len(df) >= 1:
-                eu.send_email('[RPA WARNING] OUTBOUND PCS IS GREATER THEN OSR PCS'
-                                ,'ERROR MESSAGE'
-                                ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> OUTBOUND PCS IS GREATER THEN OSR PCS' 
-                                ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                                ,warning = True
-                                ,excel_name = 'ORDER_STATUS_REPORT'
-                                ,RnRs=['PLAN','DEV', '3PL_OUTBOUND', 'OSR']
-                                )
-
-            del eu
 
 class ETL_Pipelines(ETL_Utils, DB_Utils):
     def __init__(self, saved_path='', mail_category='', check_date = datetime.now().strftime('%Y-%m-%d'), writer = 'SYSTEM', manual = False):

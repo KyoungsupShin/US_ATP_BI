@@ -21,6 +21,7 @@ if __name__ == '__main__':
                     smr.atp_raw_history_batch()
                     smr.atp_batch()
                     smr.atp_ending_onhand_batch()
+                    smr.atp_data_check()
             else:
                 print('[ITERATION] SYNC MODULE IS WAITING FOR NEXT BATCH')
             time.sleep(59)
