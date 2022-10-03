@@ -196,8 +196,9 @@ class ETL_Utils(DB_Utils, Manipluations):
         self.df = self.df.rename(columns = {'MODEL' : 'ProductName',
                                             'Power' : 'Power_Class',
                                             'Item code' : 'Item_Code',
-                                            'variable' : 'Product_Plan_Date', 
+                                            'variable' : 'Product_Plan_Date',
                                             'value' : 'MW'})
+        self.df = self.df[(self.df['ProductName'] !='빈칸') & (self.df['MW'] > 0)]
 
     def clean_data_text(self, func):
         try:
@@ -291,10 +292,14 @@ class Email_Utils(Master_Reset, ETL_Utils):
         self.recip = self.Rxoutlook.CreateRecipient(self.mail_receivers)
         self.similarity_threshold = 0.5
 
-    def send_email(self, mail_title, content_title, content_body, destination = None, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM', RnRs = ['DEV']):    
+    def send_email(self, mail_title, content_title, content_body, destination = None, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM', RnRs = ['DEV'], critical=False):    
         try:
-            with open("../utils/template.html", "r", encoding='utf-8') as f:
-                text= f.read()
+            if critical == True:
+                with open("../utils/template_critical.html", "r", encoding='utf-8') as f:
+                    text= f.read()
+            else:
+                with open("../utils/template.html", "r", encoding='utf-8') as f:
+                    text= f.read()
             text = text.replace('RPA-TITLE' , content_title)        
             text = text.replace('RPA-CONTENTS', content_body + appendix)        
             Txoutlook = self.outlook.CreateItem(0)

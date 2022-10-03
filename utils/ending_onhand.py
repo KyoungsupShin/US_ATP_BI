@@ -65,7 +65,7 @@ sql3 = '''
         from POWER_CLASS_DIST aap 
     ) as t1 , TARIFF_CODE tc 
     UNION ALL
-    select icms.Item_Code , icms.ProductName, icms.Power_Class, SegmentName , ISNULL(tc2.Rate,0) AS Tariff  from ITEM_CODE_MASTER_SAP icms
+    select icms.Item_Code , icms.ProductName, icms.Power_Class, SegmentName , ISNULL(tc2.Rate,0) AS Tariff  from ITEM_CODE_MASTER_SAP_TARIFF icms
 	left join TARIFF_CODE tc2 on RIGHT(icms.Item_Code,1) = tc2.Code  
 '''
 

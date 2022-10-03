@@ -57,6 +57,7 @@ class SAP_Master_Reset(Email_Utils):
             self.write_logs(name[1], 'PASS', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'HISTORY')
 
     def data_null_check(self, table_name, join_check_column_list):
+        RnRs = ['SAP', 'DEV', 'PLAN']
         join_check_column_list_upper = list(map(str.upper,join_check_column_list))
         nullcheck_cols = [col for col in self.df.columns if col.upper() in join_check_column_list_upper]
         nullcheck_total_result = []
@@ -72,10 +73,12 @@ class SAP_Master_Reset(Email_Utils):
                 null_col = null_col[0]
                 df_error = self.df[(self.df[null_col].isna()) | (self.df[null_col] == '')].reset_index(drop = True)
                 if table_name == 'ATP_OUTBOUND':
+                    table_name = 'OSR & Outbound'
+                    RnRs = ['3PL_OUTBOUND', 'DEV', 'PLAN']
                     df_error.rename(columns = {'WH_Code' : 'WH_Location'}, inplace = True)
                 df_error.to_csv(Global.root_path + '/data/dummy/joinError_{}.csv'.format(null_col), encoding='utf-8-sig',  index = None)
-            nullcheck_csv_path = [Global.root_path + '/data/dummy/joinError_{}.csv'.format(i[0]) for i in nullcheck_total_result]
 
+            nullcheck_csv_path = [Global.root_path + '/data/dummy/joinError_{}.csv'.format(i[0]) for i in nullcheck_total_result]
             nullcheck_total_result = ['{} : {} ROWS MISSED'.format(i[0], i[1]) for i in nullcheck_total_result]
             nullcheck_total_result = ' <br> '.join(nullcheck_total_result)
             print('[WARNING] THIS ATTACHMENT HAS AN NULL VALUES.')
@@ -83,15 +86,17 @@ class SAP_Master_Reset(Email_Utils):
             eu = Email_Utils()
             eu.send_email('[ATP] {} item codes & warehouses not on SAP master'.format(table_name)
                             ,'ERROR MESSAGE'
-                            ,f'''Instructions: Please check the attached cases and <br> 
+                            ,f'''Impact: Total available inventory amount is not affected, but when filtering by item codes, product names, or warehouses, the available inventory may be decreased.
+                             <br>Instructions: Please check the attached cases and <br> 
                              (1) add any blank item codes or WH_codes, or/and 
                              <br> (2) fix incorrect item codes or WH_codes, or/and 
                              <br> (3) if new item codes, add them to SAP
-                             <br><br> {table_name} FILE, JOIN CHECKING RESULT : <br> {nullcheck_total_result}'''
+                             <br><br> {nullcheck_total_result} <br>'''
                             , attachment_path = nullcheck_csv_path
                             , warning = True
                             , excel_name = self.excel_name
-                            , RnRs = ['SAP', 'DEV', 'PLAN']
+                            # , destination= 'dany.shin@hanwha.com'
+                            , RnRs = RnRs
                             )
             del eu
 
@@ -109,17 +114,18 @@ class SAP_Master_Reset(Email_Utils):
     def atp_data_check(self):
         eu = Email_Utils()
         eu.connect_azuredb()
-        df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
-        if len(df) >= 1:
-            eu.send_email('[ATP] OSR allocation CW in future but outbound already delivered'
-                            ,'ERROR MESSAGE'
-                            ,''' Impact: Both hard allocation and CPO shipped will be counted (Double counted), thus decreasing future available inventory amount.
-                                <br>Instructions: Please update the OSR ALLOC_CW to match Outbount ATD.'''
-                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                            ,warning = True
-                            ,excel_name = 'ORDER_STATUS_REPORT'
-                            ,RnRs=['OSR', 'PLAN', 'DEV', '3PL_OUTBOUND']
-                            )
+        # df = eu.fetch_data('select * from OSR_CPO_ETD_CHECK')
+        # if len(df) >= 1:
+        #     eu.send_email('[ATP] OSR allocation CW in future but outbound already delivered'
+        #                     ,'ERROR MESSAGE'
+        #                     ,''' Impact: Both hard allocation and CPO shipped will be counted (Double counted), thus decreasing future available inventory amount.
+        #                         <br>Instructions: Please update the OSR ALLOC_CW to match Outbount ATD.'''
+        #                     ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+        #                     ,warning = True
+        #                     ,excel_name = 'ORDER_STATUS_REPORT'
+        #                     ,RnRs=['OSR', 'PLAN', 'DEV', '3PL_OUTBOUND']
+        #                     )
+
         eu.connect_azuredb()
         df = eu.fetch_data('select * from OSR_CPO_ATD_CHECK')
         if len(df) >= 1:
@@ -143,8 +149,7 @@ class SAP_Master_Reset(Email_Utils):
                             ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'ORDER_STATUS_REPORT'
-                            ,RnRs=['PLAN','DEV', 'OSR', '3PL_OUTBOUND']
-                            )
+                            ,RnRs=['PLAN','DEV', 'OSR', '3PL_OUTBOUND'])
         eu.connect_azuredb()
         df = eu.fetch_data('select * from ALLOCATION_NEW_ITEM_CHECK')        
         if len(df) >= 1:
@@ -154,17 +159,32 @@ class SAP_Master_Reset(Email_Utils):
                             ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'ORDER_STATUS_REPORT'
-                            ,RnRs=['PLAN','DEV', '3PL_INBOUND']
-                            )
+                            ,RnRs=['PLAN','DEV', '3PL_INBOUND'])
+
+        eu.connect_azuredb() # added 9.7.22
+        df = eu.fetch_data('select * from OSR_CPO_MATCH_CHECK')        
+        if len(df) >= 1:
+            eu.send_email('[CRITICAL][ATP] CPO# or item code discrepancies between Outbound and OSR'
+                            ,'ERROR MESSAGE'
+                            ,'''Error: (1) CPO# on Outbound not found on OSR, or/and 
+                                <br> (2) CPO# on Outbound & OSR the same, but item codes different
+                                <br>Impact: CPO on Outbound (Shipped) and potentially the same CPO on OSR (but in different CPO#) will both be counted  
+                                <br> (Double counted), thus decreasing future available inventory amount.
+                                <br> Instructions: Please review the below CPO#s and update to correct CPO# on OSR or Outbound as necessary, as well as correct item codes.''' 
+                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+                            ,warning = True
+                            ,excel_name = 'ORDER_STATUS_REPORT'
+                            ,RnRs=['PLAN','DEV', 'OSR', '3PL_OUTBOUND']
+                            ,critical=True)
 
         del eu
 
 if __name__ == '__main__':
     smr = SAP_Master_Reset()
-    # smr.read_qspdb()
-    # smr.update_sap_data()
+    smr.read_qspdb()
+    smr.update_sap_data()
     smr.atp_raw_history_batch()
-    # smr.atp_batch()
-    # smr.atp_ending_onhand_batch()
+    smr.atp_batch()
+    smr.atp_ending_onhand_batch()
     # smr.atp_data_check()
-    #PR validation add!
+    # PR validation add!

@@ -71,6 +71,8 @@ class Manipluations():
             return ''
         else:
             x = str(x)
+            # x = x.replace(u'\xa0', u' ')
+            x = x.strip()
             x = x.replace("'", "")
             if len(x) > 150:
                 return x[:100]
