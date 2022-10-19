@@ -1,4 +1,4 @@
-cd C:/Users/qcells/Desktop/ATP/US_ATP_BI
+cd C:/Users/qcells/Desktop/US_ATP_BI
 
 set mytime=%date%
 

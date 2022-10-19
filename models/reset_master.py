@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime
 sys.path.append('../utils')
-from utils import Master_Reset
+from master_tools import Master_Reset
 import threading
 import time
 

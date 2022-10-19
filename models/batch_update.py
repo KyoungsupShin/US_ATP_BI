@@ -1,11 +1,7 @@
 import sys
 sys.path.append('../utils/')
-from utils import *
-from sap_sqls import *
-from sap_batch import * 
-from ending_onhand import * 
+from batch_tools import * 
 import datetime
-import threading
 import time
 import pandas as pd
 
@@ -14,10 +10,10 @@ if __name__ == '__main__':
     try:
         while True:
             smr.health_check_logs('BATCH', 1)
-            if int(datetime.datetime.now().hour) == 4 and int(datetime.datetime.now().minute) == 2:
+            if int(datetime.datetime.now().hour) == 4 and int(datetime.datetime.now().minute) == 11:
                 if datetime.datetime.now().weekday() < 6: #except for saturday, sunday 
                     smr.read_qspdb()
-                    smr.update_sap_data()
+                    smr.insert_sap_data_to_db()
                     smr.atp_raw_history_batch()
                     smr.atp_batch()
                     smr.atp_ending_onhand_batch()

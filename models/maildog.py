@@ -3,7 +3,6 @@ import os
 import sys
 from datetime import datetime
 sys.path.append('../utils')
-from utils import Email_Utils
 from mail_detect import Email_detect
 import threading
 import time
