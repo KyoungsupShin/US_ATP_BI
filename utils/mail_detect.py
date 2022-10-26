@@ -7,13 +7,15 @@ from datetime import datetime
 class Email_detect(Outlook_Utils):
     def request_master_check(self): 
         print('[EVENT] RECEIVED REQUEST MASTER XLSX ATTACHMENTS')
-        self.excel_name = 'MASTER'
-        self.read_qspdb(save_YN = True) # read qsp master dataset(itemcode, WH_names)
-        self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
-                        ,'RETURNING MASTER EXCEL FILE'
-                        ,destination = self.sender_mailaddr_extract(self.i)
-                        ,attachment_path = [Global.root_path + '/data/master.xlsx',
-                                            Global.root_path + '/data/WH_Master.csv']) #return e-mail with master excels
+        self.check_isadmin() 
+        if self.checkisadmin.values[0][0] == 1: # 1 is admin, 0 is not-admin
+            self.excel_name = 'MASTER'
+            self.read_qspdb(save_YN = True) # read qsp master dataset(itemcode, WH_names)
+            self.send_email('[RPA] MASTER FILE SHARING', 'MASTER FILE REQUEST'
+                            ,'RETURNING MASTER EXCEL FILE'
+                            ,destination = self.sender_mailaddr_extract(self.i)
+                            ,attachment_path = [Global.root_path + '/data/master.xlsx',
+                                                Global.root_path + '/data/WH_Master.csv']) #return e-mail with master excels
         self.i.Delete() # delete the e-mail
 
     def reset_master_check(self):
@@ -59,13 +61,15 @@ class Email_detect(Outlook_Utils):
 
     def manual_sap_batch(self):
         print('[EVENT] RECEIVED REQUEST MANUAL BATCH UPDATE.')
-        smr = SAP_Master_Reset()
-        smr.read_qspdb()
-        smr.insert_sap_data_to_db()
-        smr.atp_raw_history_batch(isnullcheck = False)
-        smr.atp_batch()
-        smr.atp_ending_onhand_batch()
-        del smr 
+        self.check_isadmin() 
+        if self.checkisadmin.values[0][0] == 1: # 1 is admin, 0 is not-admin
+            smr = SAP_Master_Reset()
+            smr.read_qspdb()
+            smr.insert_sap_data_to_db()
+            smr.atp_raw_history_batch(isnullcheck = False)
+            smr.atp_batch()
+            smr.atp_ending_onhand_batch()
+            del smr 
         self.i.Delete()
 
     def atp_raw_data(self):

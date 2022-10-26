@@ -138,7 +138,6 @@ class DB_Utils(): # Database basic functional class: connection, read, delete, c
         df.to_sql(tablename, con=self.engine, if_exists='append', method='multi', index=False, chunksize=chunksize)
         self.engine.dispose()
 
-
 class Log_Utils(DB_Utils): #Log tools
     def write_logs(self, FileName, Result, Received_time, ExcelType, MailSender='SYSTEM'):
         print('[EVENT] SAVED ATTACHMENTS LOG WROTTEN IN RPA_DOWNLOAD_LOGS TABLE')
@@ -166,14 +165,14 @@ class Log_Utils(DB_Utils): #Log tools
                 '''
         self.cursor.execute(sql)
         self.conn.commit()
-
+        
         sql = f'''INSERT INTO SYSTEM_HEALTH_CHECK_LOGS (System_Level, Health_Check)
                 VALUES('{System_Level}', {health_status});'''
         self.cursor.execute(sql)
         self.conn.commit()
         self.conn.close()
 
-class DB_Utils_Extra(Log_Utils): # higher modules using DB_Utils
+class DB_Utils_Extra(Log_Utils): # higher level modules using DB_Utils
     def read_qspdb(self, save_YN = False):
         self.excel_name = 'SAP_MASTER'
         self.df_wh = self.fetch_data(sql_wh_code_sql, db_conn = 'qsp')
@@ -192,18 +191,18 @@ class DB_Utils_Extra(Log_Utils): # higher modules using DB_Utils
         self.insert_dataframe_to_db('ITEM_CODE_MASTER_SAP', self.df_itemcode)
         print('[EVENT] STARTING TO SYNC SAP MASTER DATA [WAREHOUSE CODE MASTER] [ITEMCODE MASTER]')
 
-    def check_isadmin(self):
+    def check_isadmin(self): #will be -> sql to function
         sql = f'''select count(MailAddr) from ADMIN_INFO 
                 WHERE MailAddr = '{self.sender_addr}' AND IsAdmin = 'Y' '''
         self.checkisadmin = self.fetch_data(sql)
 
-    def meta_sheet_info(self):
+    def meta_sheet_info(self): #will be -> sql to function
         sql = f'''select sheetlist, targetcolumns, datatype, NullCheck from SHEET_INFO
                 where MailCategory = '{self.mail_category}' '''
         self.sheet_info = self.fetch_data(sql)
         self.target_sheet_list = list(set(self.sheet_info['sheetlist'].tolist()))
 
-    def Check_file_is_updated(self):        
+    def Check_file_is_updated(self): #will be -> sql to function
         sql = f'''
                 SELECT COUNT(1) FROM {self.mail_category}
                 WHERE Updated_Date = '{self.check_date_sql}' '''
@@ -216,7 +215,7 @@ class DB_Utils_Extra(Log_Utils): # higher modules using DB_Utils
         else:
             pass
 
-    def get_admin_address(self, RnRs = ['DEV']):
+    def get_admin_address(self, RnRs = ['DEV']): #will be -> sql to function
         if len(RnRs) == 1:
             RnRs.append('DUMMY')
         sql = f'''select MailAddr from ADMIN_INFO ai
@@ -224,7 +223,7 @@ class DB_Utils_Extra(Log_Utils): # higher modules using DB_Utils
         df_addr = self.fetch_data(sql)
         return df_addr
 
-    def check_batch_is_updated(self, table_name):
+    def check_batch_is_updated(self, table_name): #will be -> sql to function
         current_date = datetime.now().strftime('%Y-%m-%d')
         sql = f'''select count(1) from {table_name} with(nolock) where Batch_Date = '{current_date}' '''
         sql2 = f'''
@@ -245,7 +244,7 @@ class DB_Utils_Extra(Log_Utils): # higher modules using DB_Utils
             print('[EVENT] EXCEL FILE DOES NOT HAVE UPDATED_DATE COLUMN. RPA WILL CREATE. UPDATE_DATE: {}'.format(self.check_date_sql))
 
 class Warning_Utils(DB_Utils_Extra):
-    def inbound_qbis_pcs_check(self):
+    def inbound_qbis_pcs_check(self): 
         df = self.fetch_data('select * from QBIS_INVOICE_CHECK order by InvoiceNo, Item_Code, Updated_Date')
         if len(df) >= 1:
             df_html_merge = ''

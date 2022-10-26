@@ -24,11 +24,12 @@ class Refresh_pbix_web_api():
             access_id = self.request_access_token()
             endpoint = f'https://api.powerbi.com/v1.0/myorg/datasets/{self.dataset_id}/refreshes'
             headers = {'Authorization': f'Bearer ' + access_id}
-            response = requests.get(endpoint, headers=headers)
+            response = requests.post(endpoint, headers=headers)
             if response.status_code == 202:
                 print('[EVENT] DATASET PBIX REFRESHED')
             else:
-                print('[EVENT] DATASET PBIX REFRESHED')
+                print(response.status_code)
+                print('[EVENT] DATASET PBIX REFRESHED ERROR')
         except:
             print('[WARNING] DATASET PBIX REFRESH ERROR')
             pass
