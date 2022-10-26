@@ -20,15 +20,18 @@ class Refresh_pbix_web_api():
         return access_id
 
     def request_refresh(self):
-        access_id = self.request_access_token()
-        endpoint = f'https://api.powerbi.com/v1.0/myorg/datasets/{self.dataset_id}/refreshes'
-        headers = {'Authorization': f'Bearer ' + access_id}
-        response = requests.post(endpoint, headers=headers)
-        if response.status_code == 202:
-            print('[EVENT] DATASET PBIX REFRESHED')
-        else:
-            print(response.reason)
-            print(response.json())
+        try:
+            access_id = self.request_access_token()
+            endpoint = f'https://api.powerbi.com/v1.0/myorg/datasets/{self.dataset_id}/refreshes'
+            headers = {'Authorization': f'Bearer ' + access_id}
+            response = requests.get(endpoint, headers=headers)
+            if response.status_code == 202:
+                print('[EVENT] DATASET PBIX REFRESHED')
+            else:
+                print('[EVENT] DATASET PBIX REFRESHED')
+        except:
+            print('[WARNING] DATASET PBIX REFRESH ERROR')
+            pass
     
 if __name__ == '__main__':
     rbwa = Refresh_pbix_web_api()

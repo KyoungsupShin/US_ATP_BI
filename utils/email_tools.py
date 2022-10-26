@@ -65,7 +65,7 @@ class Outlook_Utils(ETL_Pipelines):
         self.similarity_threshold = 0.5
 
     def send_email(self, mail_title, content_title, content_body, destination = None, appendix = '', attachment_path='', warning=False, excel_name='SYSTEM', RnRs = ['DEV'], critical=False):    
-        # destination = 'dany.shin@hanwha.com' #only send the mail to developer 
+        # destination = 'belle.choi@qcells.com' #only send the mail to developer  belle.choi@qcells.com
         try:
             if critical == True:
                 with open("../src/template_critical.html", "r", encoding='utf-8') as f:

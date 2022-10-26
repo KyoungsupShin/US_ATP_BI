@@ -1,24 +1,3 @@
-# sql_wh_code_sql = '''
-# SELECT 
-#   tc.CD_VAL3	AS 'WH_Location'
-#   ,tc.CD_NM	AS 'WH_3PL_Name'
-#   ,tc.CD_VAL3	AS 'SAP_WH_Location_Group'
-#   ,t2.COMM_CD AS 'SAP_WH_Location_Code'
-#   ,tc.CD_NM	AS 'SAP_3PL_WH_Name'
-#   ,CASE WHEN tc.CD_VAL = 'N' THEN 'Y' ELSE 'N' END AS 'UseYN' 
-#   FROM hanwha_qcells.dbo.TB_CMMNCODE tc 
-#   LEFT JOIN (
-#       SELECT 
-#           COMM_CD	 
-#           , CD_VAL3 
-#       FROM hanwha_qcells.dbo.TB_CMMNCODE 
-#       WHERE REPR_CD = 'US062'  and COMM_CD like 'A%') t2 
-#       ON tc.CD_VAL3 = t2.CD_VAL3 COLLATE Korean_Wansung_CS_AS
-#   WHERE REPR_CD = 'US062' AND  tc.CD_VAL3 IS NOT NULL 
-#   AND (LEFT(tc.CD_NM COLLATE Korean_Wansung_CS_AS , 2) = LEFT(t2.CD_VAL3, 2)) and tc.CD_NM != tc.CD_VAL3
-#   ORDER BY tc.SORT_SEQ ASC'''
-
-
 sql_wh_code_sql = '''
     SELECT 
       tc.CD_VAL3 AS 'WH_Location',							

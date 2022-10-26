@@ -1,2 +1,2 @@
 ﻿Data_Type,기준일자,FactoryPO,RTF_Year,RTF_Month,Item_Code,Product_Name,FactoryCd,Segment,Power_Class,WH_Name,WestEast,Tariff,PCS,Total_Watt,Pallet,Port_ETD,Port_ATD,Port_ATA,Original_ETA,Update_ETA,Original_ETA_WH,Update_ETA_WH,Berth,Unloading_Date,WH_ETA,Steamship,Vessel,Voyage,MBL,HBL,Container,POD,Invoice
-INBOUND_DOMESTIC,2022-10-18,,,,,,GA,,,,,0,0,,0,,,,,,,,,,,,,,,,,,
+INBOUND_DOMESTIC,2022-10-24,,,,,,GA,,,,,0,0,,0,,,,,,,,,,,,,,,,,,

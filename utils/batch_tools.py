@@ -11,7 +11,7 @@ import pandas as pd
 
 class SAP_Master_Reset(Ending_On_Hand):    
     def atp_raw_history_batch(self, isnullcheck = True):# [call sql table, save sql table, check column names]
-        self.view_names = [['ATP_OUTBOUND' , 'OUT_BOUND_HISTORY', ['Product_Name', 'WH_Name'], ['3PL_OUTBOUND', 'DEV', 'PLAN']]
+        self.view_names = [['ATP_OUTBOUND' , 'OUT_BOUND_HISTORY', ['Product_Name', 'WH_Name'], ['OSR', '3PL_OUTBOUND', 'DEV', 'PLAN']]
                         , ['ATP_ONHAND', 'ON_HAND_HISTORY', ['Product_Name', 'WH_Name'], ['SAP', 'DEV', 'PLAN']]
                         , ['ATP_INBOUND_DOMESTIC', 'INBOUND_DOMESTIC_HISTORY', ['Product_Name', 'WH_Name'], ['SAP', 'DEV', 'PLAN']]
                         , ['ATP_INBOUND_OVERSEA', 'INBOUND_OVERSEA_HISTORY', ['Product_Name'], ['SAP', 'DEV', 'PLAN']]
@@ -26,13 +26,11 @@ class SAP_Master_Reset(Ending_On_Hand):
                                              WHERE Logi_Status not like 'Can%' OR CPO_Status NOT IN ('CANCELED', 'CONSUMED')''')
             else:      
                 self.df = self.fetch_data('select * from {}'.format(name[0]))
-
             if isnullcheck == True:
                 self.atp_data_null_check(name[0], name[2], name[3])
-            else:
-                self.check_batch_is_updated(name[1])        
-                self.insert_pd_tosql(name[1], self.df)
-                self.write_logs(name[1], 'PASS', datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'HISTORY')
+            self.check_batch_is_updated(name[1])        
+            self.insert_pd_tosql(name[1], self.df)
+            self.write_logs(name[1], 'PASS', datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'HISTORY')
 
     def atp_batch(self):
         print('[EVENT] STARTING TO SAVE TODAY HISTORY ATP RESULT')
@@ -56,13 +54,12 @@ class SAP_Master_Reset(Ending_On_Hand):
         rbwa = Refresh_pbix_web_api()
         rbwa.request_refresh()
 
-
 if __name__ == '__main__':
     smr = SAP_Master_Reset()
     # smr.read_qspdb() # daily batch
     # smr.insert_sap_data_to_db() # daily batch
-    # smr.atp_raw_history_batch(isnullcheck = False) # daily batch 
+    # smr.atp_raw_history_batch(isnullcheck = True) # daily batch 
     # smr.atp_batch() # daily batch
     smr.atp_ending_onhand_batch() # event batch -> manual email ?
     # smr.atp_data_check() # daily batch 
-    # PR validation add!
+    # PR validation add

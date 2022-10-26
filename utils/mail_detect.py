@@ -78,7 +78,7 @@ class Email_detect(Outlook_Utils):
             cpo_df.to_excel(writer, sheet_name='CPO_Match')
         self.send_email('[RPA] ATP_BI TABLE RAW DATA SHARING'
                 ,'ATP_BI TABLE RAW DATA'
-                ,'SENDING YOU THE NEWEST ATP BI CSV FILE'
+                ,'<center>SENDING YOU THE NEWEST ATP BI CSV FILE</center>'
                 , destination = self.sender_mailaddr_extract(self.i)
                 , attachment_path = Global.root_path + '/data/dummy/atp.xlsx')
         self.i.Delete()

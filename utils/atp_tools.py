@@ -48,7 +48,7 @@ class Ending_On_Hand(Outlook_Utils): #Overall Process: get atp data -> iteration
         df_finals = df_finals[col_aligned]
         df_finals = df_finals.reset_index()
         df_finals[df_finals.columns[3]] = df_finals[df_finals.columns[3]].fillna(0)
-        if df_finals.isnull().sum().sum() > 1:
+        if df_finals.isnull().sum().sum() >= 1:
             df_finals[df_finals['index'] == 'ON_HAND'] = df_finals[df_finals['index'] == 'ON_HAND'].fillna(method= 'ffill', axis = 1)
         df_finals.fillna(0, inplace = True)
         df_finals = pd.melt(df_finals, id_vars = ['index','WH_Location', 'Item_Code'], value_vars = df_finals.columns[3:].tolist())
@@ -107,7 +107,6 @@ class Ending_On_Hand(Outlook_Utils): #Overall Process: get atp data -> iteration
                     return df_ending_onhand_result_join[df_ending_onhand_result_join['RANK_YYYY']==2].YYYY_BI.max()
             else:
                 return x
-        
         self.get_atp_data()
         df_ending_onhand_result = pd.DataFrame()
         for self.ic in pd.concat([self.df_atp['Item_Code'], self.df_onhand['Item_Code']]).unique():        

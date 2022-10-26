@@ -257,7 +257,9 @@ class Warning_Utils(DB_Utils_Extra):
                             ,'ERROR MESSAGE'
                             ,f'''Error: Inbound_Overseas PCS is greater than QBIS PCS. 
                                 <br> Impact: In-take shipment will increase, thus increasing future available inventory amount.
-                                 Instructions: There are {len(df)} discrepancy cases as below. Please double check the correct PCS and make sure the 3PL data is correct.'''                             
+                                <br> Instructions: There are {len(df)} discrepancy cases as below. Please double check the correct PCS and make sure the 3PL data is correct.
+                                <br><br> *If QBIS data is incorrect, please coordinate with the relevant team and have them update the data to correct PCS.
+                                '''                             
                             ,appendix = df_html_merge.replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'INBOUND_OVERSEA'
@@ -265,19 +267,7 @@ class Warning_Utils(DB_Utils_Extra):
                             # , destination = 'dany.shin@hanwha.com'
                             ) 
 
-    def atp_data_check(self):
-        # df = self.fetch_data('select * from OSR_CPO_ETD_CHECK')
-        # if len(df) >= 1:
-        #     self.send_email('[ATP] OSR allocation CW in future but outbound already delivered'
-        #                     ,'ERROR MESSAGE'
-        #                     ,''' Impact: Both hard allocation and CPO shipped will be counted (Double counted), thus decreasing future available inventory amount.
-        #                         <br>Instructions: Please update the OSR ALLOC_CW to match Outbount ATD.'''
-        #                     ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-        #                     ,warning = True
-        #                     ,excel_name = 'ORDER_STATUS_REPORT'
-        #                     ,RnRs=['OSR', 'PLAN', 'DEV', '3PL_OUTBOUND']
-        #                     )
-        
+    def atp_data_check(self):        
         df = self.fetch_data('select * from QBIS_INVOICE_CHECK order by InvoiceNo, Item_Code, Updated_Date')
         if len(df) >= 1:
             df_html_merge = ''
@@ -287,41 +277,25 @@ class Warning_Utils(DB_Utils_Extra):
            
             self.send_email('[CRITICAL][ATP] Inbound_Overseas PCS is greater than QBIS PCS'
                             ,'ERROR MESSAGE'
-                            ,f'''Error: Inbound_Overseas PCS is greater than QBIS PCS. 
-                                <br> Impact: In-take shipment will increase, thus increasing future available inventory amount.
-                                 Instructions: There are {len(df)} discrepancy cases as below. Please double check the correct PCS and make sure the 3PL data is correct.'''                             
+                            ,f'''<strong>Error</strong>: Inbound_Overseas PCS is greater than QBIS PCS. 
+                                <br> <strong>Impact</strong>: In-take shipment will increase, thus increasing future available inventory amount.
+                                <br><br> <strong>Instructions</strong>: There are {len(df)} discrepancy cases as below. Please double check the correct PCS and make sure the 3PL data is correct.'''                             
                             ,appendix = df_html_merge.replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'INBOUND_OVERSEA'
                             ,RnRs=['DEV', 'PLAN', '3PL_INBOUND']
+                            ,critical = True
                             # , destination = 'dany.shin@hanwha.com'
                             ) 
-
-        df = self.fetch_data('select * from OSR_CPO_ATD_CHECK')
-        if len(df) >= 1:
-            self.send_email('[ATP] OSR allocation CW in past, but outbound not delivered'
-                            ,'ERROR MESSAGE'
-                            ,f'''
-                                Error: OSR allocation CW in past, but outbound not delivered 
-                                <br> Impact: Hard-allocations will remain in the past so no impact on ATP (These will be moved to shipped once ETD is added)
-                                <br> Instructions: There are {len(df)} POs that have passed the original requested delivery dates. 
-                                <br> Please use this list for your reference.''' 
-                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                            ,warning = True
-                            ,excel_name = 'ORDER_STATUS_REPORT'
-                            ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
-                            # , destination = 'dany.shin@hanwha.com'
-                            )
 
         df = self.fetch_data('select * from OSR_CPO_PCS_CHECK')
         if len(df) >= 1:
             self.send_email('[ATP] Outbound PCS is greater than OSR PCS'
                             ,'ERROR MESSAGE'
-                            ,f'''Error: Outbound PCS is greater than OSR PCS. 
-                                <br> Impact: Impact: Shipped PCS will be greater than hard allocation PCS, thus decreasing future available inventory amount.
-                                <br> Instructions: Please double check the below cases on both OSR & Outbound reports and fix the incorrect PCS count.
+                            ,f'''<strong>Error</strong>: Outbound PCS is greater than OSR PCS. 
+                                <br><br> <strong>Impact</strong>: Shipped PCS will be greater than hard allocation PCS, thus decreasing future available inventory amount.
+                                <br><br> <strong>Instructions</strong>: Please double check the below cases on both OSR & Outbound reports and fix the incorrect PCS count.
                                 ''' 
-                           
                             ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'ORDER_STATUS_REPORT'
@@ -330,29 +304,16 @@ class Warning_Utils(DB_Utils_Extra):
                             
                             )
 
-        df = self.fetch_data('select * from ALLOCATION_NEW_ITEM_CHECK')        
-        if len(df) >= 1:
-            self.send_email('[RPA WARNING] QBIS ALLOCATION PLAN NEW ITEMCODE CREATED'
-                            ,'ERROR MESSAGE'
-                            ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> QBIS ALLOCATION PLAN NEW ITEMCODE CREATED' 
-                            ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
-                            ,warning = True
-                            ,excel_name = 'ORDER_STATUS_REPORT'
-                            ,RnRs=['PLAN','DEV', '3PL_INBOUND']
-                            # , destination = 'dany.shin@hanwha.com'
-                           
-                            )
-
-
         df = self.fetch_data('select * from OSR_CPO_MATCH_CHECK')        
         if len(df) >= 1:
             self.send_email('[CRITICAL][ATP] CPO# or item code discrepancies between Outbound and OSR'
                             ,'ERROR MESSAGE'
-                            ,'''Error: (1) CPO# on Outbound not found on OSR, or/and 
+                            ,'''<strong>Error</strong>: (1) CPO# on Outbound not found on OSR, or/and 
                                 <br> (2) CPO# on Outbound & OSR the same, but item codes different
-                                <br> Impact: CPO on Outbound (Shipped) and potentially the same CPO on OSR (but in different CPO#) will both be counted  
+                                <br><br> <strong>Impact</strong>: CPO on Outbound (Shipped) and potentially the same CPO on OSR (but in different CPO#) will both be counted  
                                 <br> (Double counted), thus decreasing future available inventory amount.
-                                <br> Instructions: Please review the below CPO#s and update to correct CPO# on OSR or Outbound as necessary, as well as correct item codes.''' 
+                                <br><br> <strong>Instructions</strong>: Please review the below CPO#s and update to correct CPO# on OSR or Outbound as necessary, as well as correct item codes.
+                                <br><br> **This is data found on Outbound report**''' 
                             ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
                             ,warning = True
                             ,excel_name = 'ORDER_STATUS_REPORT'
@@ -365,12 +326,12 @@ class Warning_Utils(DB_Utils_Extra):
         self.send_email('[ATP] {} item codes & warehouses not on SAP master'.format(table_name)
                         ,'ERROR MESSAGE'
                         ,f'''
-                            Error: Item codes & warehouses on the {table_name} report not on SAP master causing join error with product names & warehouses.
+                            <strong>Error</strong>: Item codes & warehouses on the {table_name} report not on SAP master causing join error with product names & warehouses.
                             <br> {nullcheck_total_result} <br>
-                            <br> Impact: Total available inventory amount is not affected, but when filtering by item codes, product names, or warehouses, the available inventory may be decreased.
-                            <br> Instructions: Please check the attached cases and  
-                            <br> (1) add any blank item codes or WH_codes, or/and 
-                            <br> (2) fix incorrect item codes or WH_codes, or/and 
+                            <br> <strong>Impact</strong>: Total available inventory amount is not affected, but when filtering by item codes, product names, or warehouses, the available inventory may be decreased.
+                            <br><br> <strong>Instructions</strong>: Please check the attached cases and  
+                            <br> (1) add any blank item codes or WH names, or/and 
+                            <br> (2) fix incorrect item codes or WH names, or/and 
                             <br> (3) if new item codes, add them to SAP'''
                         , attachment_path = nullcheck_csv_path
                         , warning = True
@@ -379,6 +340,46 @@ class Warning_Utils(DB_Utils_Extra):
                         , RnRs = RnRs
                         )
 
+        # df = self.fetch_data('select * from OSR_CPO_ETD_CHECK')
+        # if len(df) >= 1:
+        #     self.send_email('[ATP] OSR allocation CW in future but outbound already delivered'
+        #                     ,'ERROR MESSAGE'
+        #                     ,''' Impact: Both hard allocation and CPO shipped will be counted (Double counted), thus decreasing future available inventory amount.
+        #                         <br>Instructions: Please update the OSR ALLOC_CW to match Outbount ATD.'''
+        #                     ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+        #                     ,warning = True
+        #                     ,excel_name = 'ORDER_STATUS_REPORT'
+        #                     ,RnRs=['OSR', 'PLAN', 'DEV', '3PL_OUTBOUND']
+        #                     )
+
+
+        # df = self.fetch_data('select * from OSR_CPO_ATD_CHECK')
+        # if len(df) >= 1:
+        #     self.send_email('[ATP] OSR allocation CW in past, but outbound not delivered'
+        #                     ,'ERROR MESSAGE'
+        #                     ,f'''
+        #                         Error: OSR allocation CW in past, but outbound not delivered 
+        #                         <br> Impact: Hard-allocations will remain in the past so no impact on ATP (These will be moved to shipped once ETD is added)
+        #                         <br> Instructions: There are {len(df)} POs that have passed the original requested delivery dates. 
+        #                         <br> Please use this list for your reference.''' 
+        #                     ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+        #                     ,warning = True
+        #                     ,excel_name = 'ORDER_STATUS_REPORT'
+        #                     ,RnRs=['OSR', 'PLAN','DEV', '3PL_OUTBOUND']
+        #                     # , destination = 'dany.shin@hanwha.com'
+        #                     )
+
+        # df = self.fetch_data('select * from ALLOCATION_NEW_ITEM_CHECK')        
+        # if len(df) >= 1:
+        #     self.send_email('[RPA WARNING] QBIS ALLOCATION PLAN NEW ITEMCODE CREATED'
+        #                     ,'ERROR MESSAGE'
+        #                     ,'ValueWarning: DATE VALIDATION CHECKING RESULT, <br> QBIS ALLOCATION PLAN NEW ITEMCODE CREATED' 
+        #                     ,appendix = df.to_html(index=False).replace('<td>', '<td align="center">')
+        #                     ,warning = True
+        #                     ,excel_name = 'ORDER_STATUS_REPORT'
+        #                     ,RnRs=['PLAN','DEV', '3PL_INBOUND']
+        #                     # , destination = 'dany.shin@hanwha.com'
+        #                     )
 
 class Check_Utils(DB_Utils_Extra):    
     def atp_data_null_check(self, table_name, join_check_column_list, RnRs):
@@ -401,8 +402,9 @@ class Check_Utils(DB_Utils_Extra):
                     df_error.rename(columns = {'WH_Code' : 'WH_Location'}, inplace = True)
                 df_error.to_csv(Global.root_path + '/data/dummy/joinError_{}.csv'.format(null_col), encoding='utf-8-sig',  index = None)
             nullcheck_csv_path = [Global.root_path + '/data/dummy/joinError_{}.csv'.format(i[0]) for i in nullcheck_total_result]
-            nullcheck_total_result = ['{} : {} ROWS MISSED'.format(i[0], i[1]) for i in nullcheck_total_result]
+            nullcheck_total_result = ['  - {} : {} rows'.format(i[0], i[1]) for i in nullcheck_total_result]
             nullcheck_total_result = ' <br> '.join(nullcheck_total_result)
+            nullcheck_total_result = nullcheck_total_result.replace('Product_Name' , 'Item_Code')
             print('[WARNING] THIS ATTACHMENT HAS AN NULL VALUES.')
             self.atp_join_check(table_name, nullcheck_total_result, nullcheck_csv_path, RnRs)
 

@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 sys.path.append('../utils')
 from mail_detect import Email_detect
-import threading
+# import threading
 import time
 
 if __name__ == '__main__':
@@ -18,6 +18,6 @@ if __name__ == '__main__':
     except Exception as e:
         if str(e) != 'KeyboardInterrupt':
             ed.write_error_logs(error_name = 'RPAError: OUTLOOK MAIL BOX ERROR.' + str(e), 
-                        error_type = 'RPAError')
+                                error_type = 'RPAError')
     finally:
         ed.health_check_logs('RPA', 0)
