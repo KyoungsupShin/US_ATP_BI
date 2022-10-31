@@ -10,7 +10,7 @@ import time
 
 class Master_Reset(DB_Utils): #Overall Process: get master excel file -> read -> preprocessing -> initialize master table -> insert new data
     def reset_master_tables(self): # Initialize master data.
-        self.bypass_sheets = ['US_CITY_CODE', 'POWER_CLASS_DIST', 'CW_CALENDER'] # Not-need updated master dataset(excel sheet)
+        self.bypass_sheets = ['US_CITY_CODE', 'POWER_CLASS_DIST', 'CW_CALENDER'] # No-need updated master dataset(excel sheet)
         try:
             print(Global.root_path)
             self.master_df = pd.ExcelFile(Global.root_path + '/data/master.xlsx',engine='openpyxl') #Read new master excel file

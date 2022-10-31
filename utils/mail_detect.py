@@ -1,10 +1,11 @@
 from db_tools import *
 from email_tools import * 
 from batch_tools import *
+from master_tools import *
 import glob
 from datetime import datetime 
 
-class Email_detect(Outlook_Utils):
+class Email_detect(Outlook_Utils, Master_Reset):
     def request_master_check(self): 
         print('[EVENT] RECEIVED REQUEST MASTER XLSX ATTACHMENTS')
         self.check_isadmin() 
