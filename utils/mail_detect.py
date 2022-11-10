@@ -77,7 +77,7 @@ class Email_detect(Outlook_Utils, Master_Reset):
         print('[EVENT] RECEIVED REQUEST ATP BI BATCH RAW DATASET.')
         df = self.fetch_data(sql = 'select * from ATP_BI')
         df = df.rename(columns={"기준일자":"Updated_Date", "날짜":"ATP_Date", "제품명" : "Product_Name"})
-        cpo_df = self.fetch_data(sql = 'select * from OSR_OUTBOUND_VALID_CHECK4')
+        cpo_df = self.fetch_data(sql = 'select * from OSR_OUTBOUND_DO_VALID_CHECK')
         with pd.ExcelWriter(Global.root_path + '/data/dummy/atp.xlsx') as writer:  
             df.to_excel(writer, sheet_name='ATP_BI')
             cpo_df.to_excel(writer, sheet_name='CPO_Match')
