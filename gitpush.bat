@@ -4,8 +4,6 @@ set mytime=%date%
 
 git init
 git rm -r --cached .
-git checkout dev
-git pull https://github.com/KyoungsupShin/US_ATP_BI.git dev
 git add . 
 git commit -m "%mytime%" 
 git push
